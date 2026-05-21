@@ -51,24 +51,24 @@ ABAS được thiết kế như một hệ thống đa tác tử (multi-agent). 
 
 ```mermaid
 graph TD
-    subgraph Lớp Dữ liệu (Data Layer)
+    subgraph "Lớp Dữ liệu (Data Layer)"
         A[Binance WS / CCXT Feed] -->|Dữ liệu thô| B[Data Ingestion & Validation Agent]
         B -->|Nến/Tick sạch| C[Feature Engineering Agent]
     end
 
-    subgraph Lớp Trí tuệ (Intelligence Layer)
+    subgraph "Lớp Trí tuệ (Intelligence Layer)"
         C -->|Đặc trưng| D[Market Regime Detection Agent]
         C -->|Mốc neo Anchors| E[Adaptive Grid Agent]
         D -->|Trạng thái & Độ tin cậy| E
         F[Inventory & Cost-Basis Agent] -->|Giá vốn Avg Cost| E
     end
 
-    subgraph Lớp Kiểm soát & Rủi ro (Risk Layer)
+    subgraph "Lớp Kiểm soát & Rủi ro (Risk Layer)"
         E -->|Lưới lệnh đề xuất| G[Risk Overlay & Invariant Agent]
         G -->|Lệnh được phê duyệt| H[Execution Agent]
     end
 
-    subgraph Lớp Thực thi & Giám sát (Execution & Monitoring)
+    subgraph "Lớp Thực thi & Giám sát (Execution & Monitoring)"
         H -->|Kết quả khớp fills| I[Portfolio Tracking Agent]
         I -->|Cập nhật sổ cái| F
         I -->|Trạng thái & Cảnh báo| J[Monitoring & Alerting Agent]
@@ -115,7 +115,7 @@ Các quy tắc dưới đây là những ràng buộc được mã hóa cứng. 
 *   `INV-2`: Số dư stablecoin dự trữ luôn lớn hơn hoặc bằng mức sàn quy định ($\text{Reserve USDT} \ge \text{Reserve Floor}$).
 *   `INV-3`: Bảo toàn số dư: $\sum \text{Giỏ tài sản} == \text{Tổng danh mục}$ (không được rò rỉ số dư).
 *   `INV-4`: Từ chối đặt bất kỳ lệnh nào nếu việc khớp lệnh đó dẫn đến vi phạm `INV-1` hoặc `INV-2`.
-*   `INV-5`: Lệnh bán chỉ được đặt khi giá bán thỏa mãn: $\text{Giá bán} \ge A_{\text{cost}} \times (1 + \text{min\_profit\_threshold})$.
+*   `INV-5`: Lệnh bán chỉ được đặt khi giá bán thỏa mãn: $\text{Giá bán} \ge A_{\text{cost}} \times (1 + \text{min profit threshold})$.
 *   `INV-6`: Giới hạn lượng vốn triển khai mới mỗi ngày ($\text{Vốn triển khai} \le \text{Daily Deployment Cap}$).
 *   `INV-7`: Giới hạn lượng BTC lưu giữ trên ví nóng sàn giao dịch ($\text{BTC sàn} \le \text{Exchange Cap}$).
 
