@@ -1,0 +1,17 @@
+{
+  "db_url": "postgresql://postgres:postgrespassword@localhost:5432/abas_db",
+  "redis_url": "redis://localhost:6379/0",
+  "telegram_bot_token": "",
+  "telegram_chat_id": "",
+  "binance_api_key": "",
+  "binance_secret": "",
+  "binance_enable_rate_limit": true,
+  "reserve_floor": 0.15,
+  "daily_deployment_cap": 0.05,
+  "hot_exchange_cap": 0.25,
+  "min_profit_threshold": 0.00375,
+  "core_btc_target": 0.70,
+  "trading_target": 0.15,
+  "trading_floor": 0.05,
+  "promotion_threshold": 1.3
+}

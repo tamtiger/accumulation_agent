@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.11.0-pg15
+    container_name: abas_timescaledb
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgrespassword
+      - POSTGRES_DB=abas_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: abas_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  timescaledb_data:
+  redis_data:
