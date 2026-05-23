@@ -9,7 +9,7 @@ description = "Adaptive BTC Accumulation System — v2"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-    { name = "Antigravity Agent", email = "agent@antigravity.ai" }
+    { name = "tamtiger", email = "tam.supersoft@gmail.com" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

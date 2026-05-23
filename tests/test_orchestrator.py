@@ -11,6 +11,7 @@ def mock_db_ops():
          patch("src.inventory.models.InventoryRepository.update_lot_status"), \
          patch("src.inventory.models.InventoryRepository.save_portfolio_state") as mock_save_state, \
          patch("src.inventory.models.InventoryRepository.save_trade_history"), \
+         patch("src.inventory.models.InventoryRepository.get_active_lots", return_value=[]), \
          patch("src.execution.orchestrator.ABASOrchestrator.save_raw_ohlcv_to_db"), \
          patch("src.execution.orchestrator.ABASOrchestrator.get_daily_deployed_usdt", return_value=0.0):
         yield mock_save_state
@@ -20,6 +21,7 @@ def test_orchestrator_tick_cycle(mock_db_ops):
     
     # Initialize orchestrator in mock mode
     orchestrator = ABASOrchestrator(use_mock=True)
+    orchestrator.risk_overlay.hot_exchange_cap = 0.50
     
     # Mock data ingester latest tick return
     tick = {

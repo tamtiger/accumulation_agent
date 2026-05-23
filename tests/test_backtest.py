@@ -15,6 +15,7 @@ def mock_db_and_orchestrator():
          patch("src.inventory.models.InventoryRepository.update_lot_status"), \
          patch("src.inventory.models.InventoryRepository.save_portfolio_state"), \
          patch("src.inventory.models.InventoryRepository.save_trade_history"), \
+         patch("src.inventory.models.InventoryRepository.get_active_lots", return_value=[]), \
          patch("src.execution.orchestrator.ABASOrchestrator.save_raw_ohlcv_to_db"), \
          patch("src.execution.orchestrator.ABASOrchestrator.get_daily_deployed_usdt", return_value=0.0):
         yield

@@ -5,7 +5,8 @@ from src.custody.sweeper import CustodySweeper
 
 @pytest.fixture
 def mock_db():
-    with patch("src.custody.sweeper.get_connection") as mock_conn:
+    with patch("src.custody.sweeper.get_connection") as mock_conn, \
+         patch("src.custody.sweeper.release_connection"):
         # Create mock connection, cursor
         conn_instance = MagicMock()
         cursor_instance = MagicMock()

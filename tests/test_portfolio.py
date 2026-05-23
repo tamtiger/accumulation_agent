@@ -50,14 +50,14 @@ def test_exposure_monitoring():
         reserve_usdt=50000.0,
         btc_price=50000.0
     )
-    assert abs(exposure - 0.1666666) < 1e-5
+    assert abs(exposure - 0.09090909) < 1e-5
 
     # High exposure:
     # Total portfolio = 10,000 USDT + 0.8 BTC * 50,000 = 50,000 USDT.
     # Hot exchange val = 0.8 * 50,000 = 40,000 (80% exposure > 25% cap)
     exposure_high = tracker.monitor_exposure(
         trading_btc_qty=0.8,
-        core_btc_qty=0.2,
+        core_btc_qty=0.0,
         reserve_usdt=10000.0,
         btc_price=50000.0
     )

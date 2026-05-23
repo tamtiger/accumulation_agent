@@ -17,7 +17,7 @@ def test_telegram_notifier_success():
         
         # Mock urllib.request.urlopen response
         mock_res = MagicMock()
-        mock_res.read.return_value = b'{"ok": true}'
+        mock_res.__enter__.return_value.read.return_value = b'{"ok": true}'
         
         with patch("urllib.request.urlopen", return_value=mock_res) as mock_urlopen:
             assert notifier.send_alert("Test status alert message") is True
