@@ -4,7 +4,7 @@ This file tracks the implementation progress of the **Adaptive BTC Accumulation 
 
 ## Phase Progress Summary
 *   [x] **Phase 0: Project Infrastructure** (100% Completed)
-*   [ ] **Phase 1: Rule-Based Prototype** (0% Completed)
+*   [x] **Phase 1: Rule-Based Prototype** (100% Completed)
 *   [ ] **Phase 2: Historical Backtesting** (0% Completed)
 *   [ ] **Phase 3: AI Overlay** (0% Completed)
 *   [ ] **Phase 4: RL Optimization** (0% Completed)
@@ -36,52 +36,52 @@ This file tracks the implementation progress of the **Adaptive BTC Accumulation 
 ### Phase 1 — Rule-Based Prototype (Core Engine)
 > **Recommended Build Order:** `data/` → `features/` → `inventory/` → `grid/` → `risk/` → `execution/` → `portfolio/` → `custody/` → `monitoring/`
 
-- [ ] **Data Ingestion & Cleaning (`src/data/`)**
-    - [ ] Create Binance OHLCV, funding rate, and Open Interest ingesters via CCXT.
-    - [ ] Implement Gap Detection pipeline (flag, don't silently fill gaps).
-    - [ ] Implement Outlier Detection filter (rolling z-score).
-    - [ ] Write schema validations for incoming data streams.
-    - [ ] *Testing:* Unit test gap and outlier detection with synthetic bad records.
-- [ ] **Feature Engineering (`src/features/`)**
-    - [ ] Implement technical indicators: EMA slopes (EMA20, EMA50, EMA200), RSI(14), rolling volume z-scores, Open Interest delta, and funding rate delta.
-    - [ ] Implement rolling reference anchors calculations: $A_{\text{trend}}$, $A_{\text{range}}$, $A_{\text{vol}}$, $A_{\text{mean}}$.
-    - [ ] Implement 30-day annualized realized volatility $\sigma_{\text{ann}}$ from daily log returns for grid spacing calculations.
-    - [ ] *Testing:* Unit test anchors and indicator outputs against pre-calculated pandas test vectors.
-- [ ] **Inventory Engine (`src/inventory/`)**
-    - [ ] Create FIFO ledger for per-lot BTC tracking: `(qty, price, timestamp, regime_tag)`.
-    - [ ] Implement calculations for `avg_cost`, `realized_pnl_btc`, and `unrealized_pnl_btc`.
-    - [ ] Set up database models for portfolio state and transaction snapshots.
-    - [ ] *Testing:* Property-based tests (Hypothesis) validating FIFO balance preservation on buy/sell combos.
-- [ ] **Adaptive Grid Engine (`src/grid/`)**
-    - [ ] Code base deployment table logic ($3\%, 6\%, 10\%, 15\%, 25\%$ drawdowns from $A_{\text{range}}$).
-    - [ ] Create adaptive grid spacing calculations based on $\sigma_{\text{ann}}$ volatility thresholds.
-    - [ ] Implement sell-gating checks ensuring target price is $\ge A_{\text{cost}} \times (1 + \text{min\_profit\_threshold})$ and final trading sleeve remains $\ge$ `trading_floor`.
-    - [ ] *Testing:* Verify order limits generation across varying volatility regimes.
-- [ ] **Risk Overlay & Invariant Enforcement (`src/risk/`)**
-    - [ ] Implement invariant checks: `INV-1` to `INV-7` as hard assertions before submission.
-    - [ ] Implement Kill Switch triggers (drawdown, reserve floor, stablecoin depeg, spread).
-    - [ ] Code the automatic halt/freeze logic.
-    - [ ] *Testing:* Property-based tests (Hypothesis) ensuring orders violating `INV-1` or `INV-2` are rejected.
-- [ ] **Orchestrator & Execution Prototype (`src/execution/`)**
-    - [ ] Build the main loop orchestrating: Data Validation → Features → (Fallback Regime) → Inventory → Grid → Risk → Execution → Portfolio → Monitoring.
-    - [ ] Build basic CCXT mock environment for testing fills, partial fills, and slippage conversion.
-    - [ ] *Testing:* Run full loop with mockup data to verify tick-by-tick state persistence in TimescaleDB.
-- [ ] **Portfolio Tracking & Reconciliation (`src/portfolio/`)**
-    - [ ] Create portfolio tracker to verify and update balances.
-    - [ ] Build end-of-day reconciliation loop comparing database balances with mock exchange balances.
-    - [ ] *Testing:* Verify balance reconciliation outputs warnings if discrepancy $> 0.01\%$.
-- [ ] **Custody & Sweeping (`src/custody/`)**
-    - [ ] Code core promotion sweep signal logic (calculating excess when `trading_btc_qty > trading_target * 1.3` for 7 consecutive days).
-    - [ ] *Testing:* Verify sweep signal fires only after 7 continuous days of target breach.
-- [ ] **Monitoring & Alerting (`src/monitoring/`)**
-    - [ ] Register Prometheus gauges/counters for loops latency, order slippage, and balances.
-    - [ ] Implement Telegram notification wrapper.
-    - [ ] *Testing:* Trigger a mock halt and verify Telegram message dispatch.
-- [ ] **Backtest Harness (`src/backtest/`)**
-    - [ ] Set up Vectorbt/Backtrader backtesting framework.
-    - [ ] Integrate transaction fees (taker/maker), slippage models, and withdrawal fee assumptions.
-    - [ ] Implement tax drag model with after-tax reporting.
-    - [ ] *Testing:* Verify tax logic on long-term capital gains vs short-term rates.
+- [x] **Data Ingestion & Cleaning (`src/data/`)**
+    - [x] Create Binance OHLCV, funding rate, and Open Interest ingesters via CCXT.
+    - [x] Implement Gap Detection pipeline (flag, don't silently fill gaps).
+    - [x] Implement Outlier Detection filter (rolling z-score).
+    - [x] Write schema validations for incoming data streams.
+    - [x] *Testing:* Unit test gap and outlier detection with synthetic bad records.
+- [x] **Feature Engineering (`src/features/`)**
+    - [x] Implement technical indicators: EMA slopes (EMA20, EMA50, EMA200), RSI(14), rolling volume z-scores, Open Interest delta, and funding rate delta.
+    - [x] Implement rolling reference anchors calculations: $A_{\text{trend}}$, $A_{\text{range}}$, $A_{\text{vol}}$, $A_{\text{mean}}$.
+    - [x] Implement 30-day annualized realized volatility $\sigma_{\text{ann}}$ from daily log returns for grid spacing calculations.
+    - [x] *Testing:* Unit test anchors and indicator outputs against pre-calculated pandas test vectors.
+- [x] **Inventory Engine (`src/inventory/`)**
+    - [x] Create FIFO ledger for per-lot BTC tracking: `(qty, price, timestamp, regime_tag)`.
+    - [x] Implement calculations for `avg_cost`, `realized_pnl_btc`, and `unrealized_pnl_btc`.
+    - [x] Set up database models for portfolio state and transaction snapshots.
+    - [x] *Testing:* Property-based tests (Hypothesis) validating FIFO balance preservation on buy/sell combos.
+- [x] **Adaptive Grid Engine (`src/grid/`)**
+    - [x] Code base deployment table logic ($3\%, 6\%, 10\%, 15\%, 25\%$ drawdowns from $A_{\text{range}}$).
+    - [x] Create adaptive grid spacing calculations based on $\sigma_{\text{ann}}$ volatility thresholds.
+    - [x] Implement sell-gating checks ensuring target price is $\ge A_{\text{cost}} \times (1 + \text{min\_profit\_threshold})$ and final trading sleeve remains $\ge$ `trading_floor`.
+    - [x] *Testing:* Verify order limits generation across varying volatility regimes.
+- [x] **Risk Overlay & Invariant Enforcement (`src/risk/`)**
+    - [x] Implement invariant checks: `INV-1` to `INV-7` as hard assertions before submission.
+    - [x] Implement Kill Switch triggers (drawdown, reserve floor, stablecoin depeg, spread).
+    - [x] Code the automatic halt/freeze logic.
+    - [x] *Testing:* Property-based tests (Hypothesis) ensuring orders violating `INV-1` or `INV-2` are rejected.
+- [x] **Orchestrator & Execution Prototype (`src/execution/`)**
+    - [x] Build the main loop orchestrating: Data Validation → Features → (Fallback Regime) → Inventory → Grid → Risk → Execution → Portfolio → Monitoring.
+    - [x] Build basic CCXT mock environment for testing fills, partial fills, and slippage conversion.
+    - [x] *Testing:* Run full loop with mockup data to verify tick-by-tick state persistence in TimescaleDB.
+- [x] **Portfolio Tracking & Reconciliation (`src/portfolio/`)**
+    - [x] Create portfolio tracker to verify and update balances.
+    - [x] Build end-of-day reconciliation loop comparing database balances with mock exchange balances.
+    - [x] *Testing:* Verify balance reconciliation outputs warnings if discrepancy $> 0.01\%$.
+- [x] **Custody & Sweeping (`src/custody/`)**
+    - [x] Code core promotion sweep signal logic (calculating excess when `trading_btc_qty > trading_target * 1.3` for 7 consecutive days).
+    - [x] *Testing:* Verify sweep signal fires only after 7 continuous days of target breach.
+- [x] **Monitoring & Alerting (`src/monitoring/`)**
+    - [x] Register Prometheus gauges/counters for loops latency, order slippage, and balances.
+    - [x] Implement Telegram notification wrapper.
+    - [x] *Testing:* Trigger a mock halt and verify Telegram message dispatch.
+- [x] **Backtest Harness (`src/backtest/`)**
+    - [x] Set up Vectorbt/Backtrader backtesting framework.
+    - [x] Integrate transaction fees (taker/maker), slippage models, and withdrawal fee assumptions.
+    - [x] Implement tax drag model with after-tax reporting.
+    - [x] *Testing:* Verify tax logic on long-term capital gains vs short-term rates.
 
 ### Phase 2 — Historical Backtesting & Validation
 - [ ] **Cycle-by-Cycle Historical Simulation**
