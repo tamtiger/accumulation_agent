@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-05-25
+
+### Added
+- **Tax Matching & Export**:
+  - Implemented `tax_records` database table schema and `save_tax_record`/`get_tax_records` repository methods to store matching FIFO lot consumptions on sells.
+  - Implemented CSV export functionality `export_tax_report_csv` in `FIFOLedger` matching tax tool formats (Koinly, CoinTracker).
+- **Core Parameters**:
+  - Added the missing `inv3_epsilon` config parameters in Pydantic Settings class and `config/production.json` default settings.
+- **Verification Tests**:
+  - Added unit test `test_risk_overlay_inv5_sell_gating_fifo_head` checking that `INV-5` enforces profit margins strictly against the FIFO head lot purchase price.
+  - Added unit test `test_risk_overlay_inv3_limit_order_different_price` verifying that limit orders proposed at a price different from the spot price pass value conservation audits without false halts.
+
+### Changed & Fixed
+- **INV-5 Sell Gating**:
+  - Updated `GridEngine.calculate_sell_size` and `RiskOverlay` to evaluate the sell gate margin check against `avg_cost_fifo_lot` instead of the global portfolio average cost basis (`avg_cost`).
+- **INV-3 Value Conservation**:
+  - Rewrote the conservation check in `RiskOverlay.check_invariants` to compare proposed states against expected order execution values within `inv3_epsilon` (for BTC), allowing limit orders to be placed without triggering false value-leak halts.
+- **Custody Sweeper Snapshot**:
+  - Updated the DB query in `src/custody/sweeper.py` to aggregate tick-by-tick state history into daily snapshots (`DISTINCT ON (date_trunc('day', time))`), evaluating the 7 consecutive days rule using daily balances instead of individual tick balances.
+- **Live Slippage Audit**:
+  - Modified live slippage tracking in the orchestrator to calculate slippage dynamically versus the tick mark price at placement, resolving the live CCXT bypass where CCXT does not return custom `"slippage"` response keys.
+- **Dynamic A_local_low**:
+  - Replaced hardcoded `local_low = a_mean * 0.97` with dynamic calculations of `A_local_low_48h` (rolling 48h minimum low) in `FeatureEngine` batch and online paths, which is anchored at rebound detection and reset after a sell fills.
+
 ## [2.0.0] - 2026-05-23
 
 ### Added

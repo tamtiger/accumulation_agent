@@ -120,6 +120,21 @@ def init_db():
             );
             """)
 
+            # 8. tax_records (FIFO consumption matching for tax reporting)
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS tax_records (
+                id SERIAL PRIMARY KEY,
+                sell_time TIMESTAMPTZ NOT NULL,
+                sell_price DOUBLE PRECISION NOT NULL,
+                sell_qty DOUBLE PRECISION NOT NULL,
+                lot_purchase_time TIMESTAMPTZ NOT NULL,
+                lot_purchase_price DOUBLE PRECISION NOT NULL,
+                realized_pnl_usd DOUBLE PRECISION NOT NULL,
+                holding_period_days INTEGER NOT NULL,
+                order_id VARCHAR(50) NOT NULL
+            );
+            """)
+
             logger.info("Database schema initialized successfully.")
     except Exception as e:
         logger.error(f"Error initializing database schema: {e}")

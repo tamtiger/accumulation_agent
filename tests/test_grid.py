@@ -74,7 +74,7 @@ def test_grid_sell_sizing():
         local_low=38000.0,
         trading_btc_qty=trading_btc,
         total_portfolio_value_btc=total_btc,
-        avg_cost=avg_cost,
+        avg_cost_fifo_lot=avg_cost,
         regime=1
     )
     assert size == 0.0
@@ -85,7 +85,7 @@ def test_grid_sell_sizing():
         local_low=40200.0,
         trading_btc_qty=trading_btc,
         total_portfolio_value_btc=total_btc,
-        avg_cost=avg_cost,
+        avg_cost_fifo_lot=avg_cost,
         regime=1
     )
     assert size == 0.0
@@ -97,7 +97,7 @@ def test_grid_sell_sizing():
         local_low=40000.0,
         trading_btc_qty=trading_btc,
         total_portfolio_value_btc=total_btc,
-        avg_cost=avg_cost,
+        avg_cost_fifo_lot=avg_cost,
         regime=1
     )
     assert abs(size - 0.10) < 1e-7
@@ -108,7 +108,7 @@ def test_grid_sell_sizing():
         local_low=40000.0,
         trading_btc_qty=trading_btc,
         total_portfolio_value_btc=total_btc,
-        avg_cost=avg_cost,
+        avg_cost_fifo_lot=avg_cost,
         regime=0
     )
     assert size == 0.0

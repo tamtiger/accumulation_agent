@@ -14,6 +14,7 @@ def test_config_default_values():
     assert settings.trading_target == 0.15
     assert settings.trading_floor == 0.05
     assert settings.promotion_threshold == 1.3
+    assert settings.inv3_epsilon == 1e-8
 
 def test_config_override_by_env(tmp_path):
     """Test that environmental variables override configuration files."""

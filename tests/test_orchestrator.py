@@ -37,7 +37,8 @@ def test_orchestrator_tick_cycle(mock_db_ops):
         "A_trend": 30000.0,
         "A_range": 32000.0,  # drawdown = (32k - 30.1k)/32k = 5.9% -> triggers 5% deployment
         "A_mean": 30100.0,
-        "sigma_ann": 0.35  # spacing = 1.5%
+        "sigma_ann": 0.35,  # spacing = 1.5%
+        "A_local_low_48h": 29800.0
     }
     orchestrator.features_engine.compute_latest_features = MagicMock(return_value=features)
     

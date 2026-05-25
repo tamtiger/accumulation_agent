@@ -63,6 +63,24 @@ def test_risk_overlay_inv5_sell_gating():
         overlay.check_invariants(orders, state, btc_price=50000.0, daily_deployed_usdt=0.0)
     assert "INV-5 Violated" in str(excinfo.value)
 
+def test_risk_overlay_inv5_sell_gating_fifo_head():
+    overlay = RiskOverlay()
+    state = {
+        "core_btc_qty": 1.0,
+        "trading_btc_qty": 0.2,
+        "reserve_usdt": 30000.0,
+        "avg_cost": 40000.0,             # global average is low
+        "avg_cost_fifo_lot": 50000.0      # FIFO head is high cost
+    }
+    # FIFO head is 50,000. Min sell price = 50,000 * 1.00375 = 50,187.5
+    # Selling at 49,000 should violate INV-5, even though 49,000 > 40,000 (avg_cost)
+    orders = [
+        ProposedOrder(side="sell", qty=0.1, price=49000.0)
+    ]
+    with pytest.raises(InvariantViolationError) as excinfo:
+        overlay.check_invariants(orders, state, btc_price=50000.0, daily_deployed_usdt=0.0)
+    assert "INV-5 Violated" in str(excinfo.value)
+
 def test_risk_overlay_inv6_deployment_cap():
     overlay = RiskOverlay()
     state = {
@@ -118,3 +136,61 @@ def test_kill_switches():
         )
     assert "System halted" in str(excinfo.value)
     assert "Bid-ask spread" in str(excinfo.value)
+
+def test_risk_overlay_soft_invariants():
+    overlay = RiskOverlay()
+    
+    state = {
+        "core_btc_qty": 1.0,
+        "trading_btc_qty": 0.2,
+        "reserve_usdt": 10000.0,
+        "avg_cost": 40000.0
+    }
+    
+    orders_sell = [
+        ProposedOrder(side="sell", qty=0.1, price=50000.0)
+    ]
+    overlay.check_invariants(orders_sell, state, btc_price=50000.0, daily_deployed_usdt=0.0)
+    
+    overlay.check_invariants([], state, btc_price=50000.0, daily_deployed_usdt=0.0)
+    
+    orders_buy = [
+        ProposedOrder(side="buy", qty=0.05, price=50000.0)
+    ]
+    with pytest.raises(InvariantViolationError) as excinfo:
+        overlay.check_invariants(orders_buy, state, btc_price=50000.0, daily_deployed_usdt=0.0)
+    assert "INV-2 Violated" in str(excinfo.value)
+
+def test_kill_switch_reserve_floor():
+    overlay = RiskOverlay()
+    
+    with pytest.raises(SystemHaltError) as excinfo:
+        overlay.audit_kill_switches(
+            drawdown_24h=0.0,
+            drawdown_7d=0.0,
+            current_reserve_usdt=10000.0,
+            total_portfolio_usdt=100000.0,
+            api_error_rate_5m=0.0,
+            stablecoin_peg_deviations={"USDT": 0.0},
+            bid_ask_spread_binance=0.0001,
+            median_30d_spread=0.0001,
+            execution_slippage=0.0
+        )
+    assert "Reserve ratio" in str(excinfo.value)
+
+def test_risk_overlay_inv3_limit_order_different_price():
+    overlay = RiskOverlay()
+    state = {
+        "core_btc_qty": 1.0,
+        "trading_btc_qty": 0.2,
+        "reserve_usdt": 30000.0,
+        "avg_cost": 40000.0
+    }
+    # Current btc_price is 50,000.
+    # Limit BUY order is proposed at 48,000 (different from 50,000)
+    # The INV-3 check should pass now that it measures conservation of cash flow changes
+    orders = [
+        ProposedOrder(side="buy", qty=0.05, price=48000.0)
+    ]
+    overlay.check_invariants(orders, state, btc_price=50000.0, daily_deployed_usdt=0.0)
+

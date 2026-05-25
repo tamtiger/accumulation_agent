@@ -82,7 +82,7 @@ class GridEngine:
         local_low: float,
         trading_btc_qty: float,
         total_portfolio_value_btc: float,
-        avg_cost: float,
+        avg_cost_fifo_lot: float,
         regime: int
     ) -> float:
         """
@@ -92,7 +92,7 @@ class GridEngine:
             return 0.0
 
         # 1. Sell Gating Check: Price must clear cost basis + minimum profit margin
-        required_sell_price = avg_cost * (1.0 + self.min_profit_threshold)
+        required_sell_price = avg_cost_fifo_lot * (1.0 + self.min_profit_threshold)
         if current_price < required_sell_price:
             logger.debug(f"Sell order suppressed: price {current_price:.2f} < cost threshold {required_sell_price:.2f}")
             return 0.0

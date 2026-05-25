@@ -23,25 +23,18 @@ class CustodySweeper:
         conn = get_connection()
         try:
             with conn.cursor() as cur:
-                # Query portfolio states in the last 7 days
+                # Query portfolio states daily snapshots (last snapshot of each day) in the last 7 days
                 cur.execute(
                     """
-                    SELECT time, trading_btc_qty, core_btc_qty
+                    SELECT DISTINCT ON (date_trunc('day', time)) time, trading_btc_qty, core_btc_qty
                     FROM portfolio_states
                     WHERE time >= NOW() - INTERVAL '7 days'
-                    ORDER BY time ASC
+                    ORDER BY date_trunc('day', time) ASC, time DESC
                     """
                 )
                 rows = cur.fetchall()
-                if not rows:
-                    return None
-                
-                # Verify that we actually have a dataset spanning at least 7 days (6.9d threshold for safety margin)
-                first_time = rows[0][0]
-                last_time = rows[-1][0]
-                duration = last_time - first_time
-                if duration < datetime.timedelta(days=6.9):
-                    # Insufficient duration of historical data to trigger promotion
+                if len(rows) < 7:
+                    # Insufficient days of historical data to trigger promotion
                     return None
                 
                 # Check if trading sleeve exceeded target * threshold consistently

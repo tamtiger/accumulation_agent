@@ -10,7 +10,8 @@ from src.inventory.models import TradeLot
 def mock_db_repo():
     with patch("src.inventory.models.InventoryRepository.save_lot", return_value=1), \
          patch("src.inventory.models.InventoryRepository.update_lot_status"), \
-         patch("src.inventory.models.InventoryRepository.save_trade_history"):
+         patch("src.inventory.models.InventoryRepository.save_trade_history"), \
+         patch("src.inventory.models.InventoryRepository.save_tax_record"):
         yield
 
 def test_ledger_buy_sell():
@@ -23,12 +24,14 @@ def test_ledger_buy_sell():
     assert ledger.trading_btc_qty == 1.0
     assert ledger.reserve_usdt == 50000.0
     assert ledger.avg_cost == 50000.0
+    assert ledger.avg_cost_fifo_lot == 50000.0
     
     # Buy 1 BTC at 60,000
     ledger.add_buy_lot(1.0, 60000.0, now, "regime_1")
     assert ledger.trading_btc_qty == 2.0
     assert ledger.reserve_usdt == -10000.0
     assert ledger.avg_cost == 55000.0
+    assert ledger.avg_cost_fifo_lot == 50000.0  # head of FIFO is still 50,000
     
     # Sell 1.5 BTC at 70,000
     pnl = ledger.consume_sell_lots(1.5, 70000.0, now, "order_1")
@@ -40,6 +43,7 @@ def test_ledger_buy_sell():
     assert pnl == 25000.0
     assert ledger.trading_btc_qty == 0.5
     assert ledger.avg_cost == 60000.0  # remaining 0.5 BTC of the second lot
+    assert ledger.avg_cost_fifo_lot == 60000.0  # head of FIFO is now 60,000
 
 # Hypothesis property-based test
 @given(
@@ -92,3 +96,22 @@ def test_hypothesis_fifo_conservation(buys, sell_fraction):
     pre_sell_val = (10000000.0 - total_spent_usdt) + total_bought_qty * sell_price
     post_sell_val = ledger.reserve_usdt + ledger.trading_btc_qty * sell_price
     assert abs(pre_sell_val - post_sell_val) < 1e-7
+
+def test_ledger_restore_core_btc():
+    ledger = FIFOLedger()
+    
+    mock_state = {
+        "time": datetime.datetime.now(datetime.timezone.utc),
+        "core_btc_qty": 2.5,
+        "trading_btc_qty": 0.5,
+        "reserve_usdt": 50000.0,
+        "total_portfolio_val_usdt": 150000.0,
+        "active_regime": 1,
+        "regime_confidence": 1.0
+    }
+    
+    with patch("src.inventory.models.InventoryRepository.get_latest_portfolio_state", return_value=mock_state), \
+         patch("src.inventory.models.InventoryRepository.get_active_lots", return_value=[]):
+        ledger.load_from_db()
+        assert ledger.core_btc_qty == 2.5
+

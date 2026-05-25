@@ -13,5 +13,6 @@
   "core_btc_target": 0.70,
   "trading_target": 0.15,
   "trading_floor": 0.05,
-  "promotion_threshold": 1.3
+  "promotion_threshold": 1.3,
+  "inv3_epsilon": 1e-8
 }

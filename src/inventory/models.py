@@ -137,6 +137,41 @@ class InventoryRepository:
             release_connection(conn)
 
     @staticmethod
+    def get_latest_portfolio_state() -> Optional[Dict[str, Any]]:
+        """
+        Retrieves the latest saved portfolio state snapshot.
+        """
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT time, core_btc_qty, trading_btc_qty, reserve_usdt, total_portfolio_val_usdt, active_regime, regime_confidence
+                    FROM portfolio_states
+                    ORDER BY time DESC
+                    LIMIT 1
+                    """
+                )
+                row = cur.fetchone()
+                if row:
+                    return {
+                        "time": row[0],
+                        "core_btc_qty": row[1],
+                        "trading_btc_qty": row[2],
+                        "reserve_usdt": row[3],
+                        "total_portfolio_val_usdt": row[4],
+                        "active_regime": row[5],
+                        "regime_confidence": row[6]
+                    }
+                return None
+        except Exception as e:
+            logger.error(f"SQL Error in get_latest_portfolio_state: {e}")
+            return None
+        finally:
+            release_connection(conn)
+
+
+    @staticmethod
     def save_trade_history(time_val: datetime.datetime, order_id: str, symbol: str, side: str, price: float, qty: float, fees: float, slippage: float, pnl: float) -> None:
         """
         Logs details of completed trade execution.
@@ -155,5 +190,71 @@ class InventoryRepository:
         except Exception as e:
             logger.error(f"SQL Error in save_trade_history: {e}")
             raise e
+        finally:
+            release_connection(conn)
+
+    @staticmethod
+    def save_tax_record(
+        sell_time: datetime.datetime,
+        sell_price: float,
+        sell_qty: float,
+        lot_purchase_time: datetime.datetime,
+        lot_purchase_price: float,
+        realized_pnl_usd: float,
+        holding_period_days: int,
+        order_id: str
+    ) -> None:
+        """
+        Saves a matched tax lot transaction record.
+        """
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO tax_records (sell_time, sell_price, sell_qty, lot_purchase_time, lot_purchase_price, realized_pnl_usd, holding_period_days, order_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (sell_time, sell_price, sell_qty, lot_purchase_time, lot_purchase_price, realized_pnl_usd, holding_period_days, order_id)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"SQL Error in save_tax_record: {e}")
+            raise e
+        finally:
+            release_connection(conn)
+
+    @staticmethod
+    def get_tax_records() -> List[Dict[str, Any]]:
+        """
+        Retrieves all tax records chronologically by sell_time.
+        """
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT sell_time, sell_price, sell_qty, lot_purchase_time, lot_purchase_price, realized_pnl_usd, holding_period_days, order_id
+                    FROM tax_records
+                    ORDER BY sell_time ASC
+                    """
+                )
+                rows = cur.fetchall()
+                records = []
+                for row in rows:
+                    records.append({
+                        "sell_date": row[0],
+                        "sell_price": row[1],
+                        "sell_qty": row[2],
+                        "lot_purchase_date": row[3],
+                        "lot_purchase_price": row[4],
+                        "realized_pnl_usd": row[5],
+                        "holding_period_days": row[6],
+                        "order_id": row[7]
+                    })
+                return records
+        except Exception as e:
+            logger.error(f"SQL Error in get_tax_records: {e}")
+            return []
         finally:
             release_connection(conn)

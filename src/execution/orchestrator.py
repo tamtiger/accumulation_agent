@@ -13,6 +13,9 @@ from src.inventory.models import InventoryRepository
 from src.grid.engine import GridEngine
 from src.risk.overlay import RiskOverlay, ProposedOrder, InvariantViolationError, SystemHaltError
 from src.execution.ccxt_mock import BinanceMock
+from src.portfolio.tracker import PortfolioTracker
+from src.custody.sweeper import CustodySweeper
+from src.monitoring.exporter import loop_latency, order_slippage, portfolio_balance, api_error_counter, invariant_violation_counter, TelegramNotifier
 
 logger = get_agent_logger("orchestrator")
 
@@ -28,6 +31,10 @@ class ABASOrchestrator:
         self.ledger = FIFOLedger()
         self.grid_engine = GridEngine()
         self.risk_overlay = RiskOverlay()
+        self.portfolio_tracker = PortfolioTracker(hot_exchange_cap=settings.hot_exchange_cap)
+        self.custody_sweeper = CustodySweeper(trading_target=settings.trading_target, promotion_threshold_multiplier=settings.promotion_threshold)
+        self.notifier = TelegramNotifier()
+        self.anchored_local_low: Optional[float] = None
         
         # Initialize execution exchange connection
         if use_mock:
@@ -96,9 +103,39 @@ class ABASOrchestrator:
             self.ledger.load_from_db()
             
             # Sync balances with the exchange account
-            balances = self.exchange.fetch_balance()
+            try:
+                balances = self.exchange.fetch_balance()
+            except Exception as e:
+                api_error_counter.labels(exchange="binance").inc()
+                raise e
             self.ledger.reserve_usdt = float(balances["free"]["USDT"])
             self.ledger.trading_btc_qty = float(balances["free"]["BTC"])
+
+            # Check Custody Promotion sweep signal
+            excess = self.custody_sweeper.check_promotion_trigger()
+            if excess and excess > 0:
+                logger.critical(f"Sweeping excess {excess:.6f} BTC from trading to core cold storage.")
+                self.ledger.core_btc_qty += excess
+                self.ledger.trading_btc_qty -= excess
+                # Update mock/live exchange
+                if hasattr(self.exchange, "trading_btc"):
+                    self.exchange.trading_btc -= excess
+                self.notifier.send_alert(f"Core Promotion Sweep Triggered: Swept {excess:.6f} BTC to cold storage.")
+
+            # Reconcile balances and monitor exposure
+            db_state = self.ledger.get_state_snapshot()
+            self.portfolio_tracker.reconcile_balances(
+                exchange_usdt=self.ledger.reserve_usdt,
+                exchange_btc=self.ledger.trading_btc_qty,
+                db_reserve_usdt=db_state["reserve_usdt"],
+                db_trading_btc=db_state["trading_btc_qty"]
+            )
+            self.portfolio_tracker.monitor_exposure(
+                trading_btc_qty=self.ledger.trading_btc_qty,
+                core_btc_qty=self.ledger.core_btc_qty,
+                reserve_usdt=self.ledger.reserve_usdt,
+                btc_price=price
+            )
 
             # 5. Adaptive Grid Ordering Proposal
             proposed_orders: List[ProposedOrder] = []
@@ -115,14 +152,27 @@ class ABASOrchestrator:
                 buy_qty = buy_val_usdt / price
                 proposed_orders.append(ProposedOrder(side="buy", qty=buy_qty, price=price))
 
-            # Sell check (rebound low computed relative to a_mean)
-            local_low = a_mean * 0.97
+            # Sell check (rebound low tracked dynamically)
+            a_local_low_48h = float(features.get("A_local_low_48h", a_mean * 0.97))
+            rebound_threshold = a_local_low_48h * 1.04
+            
+            if price >= rebound_threshold:
+                if self.anchored_local_low is None:
+                    self.anchored_local_low = a_local_low_48h
+                    logger.info(f"Rebound detected! Anchoring local_low to {self.anchored_local_low:.2f}")
+            else:
+                if self.anchored_local_low is not None and price < self.anchored_local_low:
+                    logger.info(f"Price fell below anchored local low. Resetting from {self.anchored_local_low:.2f} to {a_local_low_48h:.2f}")
+                    self.anchored_local_low = a_local_low_48h
+            
+            local_low = self.anchored_local_low if self.anchored_local_low is not None else a_local_low_48h
+            
             sell_qty_btc = self.grid_engine.calculate_sell_size(
                 current_price=price,
                 local_low=local_low,
                 trading_btc_qty=self.ledger.trading_btc_qty,
                 total_portfolio_value_btc=self.ledger.total_btc_qty,
-                avg_cost=self.ledger.avg_cost,
+                avg_cost_fifo_lot=self.ledger.avg_cost_fifo_lot,
                 regime=regime
             )
             if sell_qty_btc > 0.0001:
@@ -156,22 +206,27 @@ class ABASOrchestrator:
                     f"Executing approved order: {order.side.upper()} {order.qty:.6f} BTC @ {order.price:.2f}",
                     action="execute_order"
                 )
-                exec_report = self.exchange.create_order(
-                    symbol="BTC/USDT",
-                    type_val="limit",
-                    side=order.side,
-                    amount=order.qty,
-                    price=order.price
-                )
+                try:
+                    exec_report = self.exchange.create_order(
+                        symbol="BTC/USDT",
+                        type_val="limit",
+                        side=order.side,
+                        amount=order.qty,
+                        price=order.price
+                    )
+                except Exception as e:
+                    api_error_counter.labels(exchange="binance").inc()
+                    raise e
 
-                # Slippage verification
-                slippage = exec_report.get("info", {}).get("slippage", 0.0)
+                # Slippage verification (calculated dynamically vs placement tick price)
+                exec_price = exec_report.get("average", price)
+                slippage = abs(exec_price - price) / price
+                order_slippage.set(slippage)
                 if slippage > 0.02:
                     self.risk_overlay.trigger_halt(f"Executed price slippage {slippage*100:.2f}% exceeds 2% cap.")
 
                 # Update FIFO ledger
                 time_now = datetime.datetime.now(datetime.timezone.utc)
-                exec_price = exec_report.get("average", price)
                 exec_qty = exec_report["amount"]
 
                 if order.side == "buy":
@@ -188,6 +243,9 @@ class ABASOrchestrator:
                         timestamp=time_now,
                         order_id=exec_report["id"]
                     )
+                    # Reset anchored local low to start a new cycle
+                    self.anchored_local_low = None
+                    logger.info("Sell executed. Resetting anchored local low for next cycle.")
 
             # 8. Portfolio Tracking Snapshots Persistence
             time_now = datetime.datetime.now(datetime.timezone.utc)
@@ -202,7 +260,13 @@ class ABASOrchestrator:
                 confidence=1.0
             )
 
+            # Update Prometheus gauges
+            portfolio_balance.labels(sleeve="core", asset="BTC").set(self.ledger.core_btc_qty)
+            portfolio_balance.labels(sleeve="trading", asset="BTC").set(self.ledger.trading_btc_qty)
+            portfolio_balance.labels(sleeve="reserve", asset="USDT").set(self.ledger.reserve_usdt)
+
             latency_ms = (time.time() - start_time) * 1000
+            loop_latency.labels(agent_name="orchestrator").set(latency_ms)
             logger.info(
                 f"Tick cycle completed successfully. Latency: {latency_ms:.1f}ms",
                 action="tick_end"
@@ -211,9 +275,12 @@ class ABASOrchestrator:
         except InvariantViolationError as e:
             logger.error(f"Order rejected by Risk Overlay: {e}", action="invariant_violation")
             self.risk_overlay.system_halted = True
+            invariant_violation_counter.inc()
+            self.notifier.send_alert(f"Invariant Violation: {e}")
         except SystemHaltError as e:
             logger.critical(f"System entered HALT state: {e}", action="system_halt")
             self.risk_overlay.system_halted = True
+            self.notifier.send_alert(f"SYSTEM HALT: {e}")
         except Exception as e:
             logger.error(f"Unexpected exception in orchestrator tick: {e}", exc_info=True, action="loop_error")
 

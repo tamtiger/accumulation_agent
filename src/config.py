@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     trading_target: float = Field(0.15, validation_alias="TRADING_TARGET")
     trading_floor: float = Field(0.05, validation_alias="TRADING_FLOOR")
     promotion_threshold: float = Field(1.3, validation_alias="PROMOTION_THRESHOLD")
+    inv3_epsilon: float = Field(1e-8, validation_alias="INV3_EPSILON")
 
     model_config = SettingsConfigDict(
         env_file=".env",
