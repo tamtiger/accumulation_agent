@@ -2,10 +2,23 @@
 
 > Long-term BTC accumulation engine using volatility harvesting, adaptive inventory management, and AI-assisted regime detection.
 >
-> **Version:** 2.0
+> **Version:** 2.1 (patched)
 > **Primary objective:** Maximize BTC holdings over multiple market cycles, net of fees and taxes, vs. passive HODL benchmark.
 
 ---
+
+## Changelog v2.0 → v2.1 (patch)
+
+| Area | Change |
+|---|---|
+| Bootstrapping | **[FIX]** Unified B1/B2/B3 percentages — was inconsistent between plan and AGENTS.md |
+| INV-3 | **[FIX]** Changed from strict equality to epsilon tolerance to handle floating-point and unsettled fees |
+| INV-5 sell gating | **[FIX]** Clarified that sell gate checks the FIFO lot price to be consumed, not the global avg_cost |
+| Local low definition | **[FIX]** Defined "local low" as rolling min(low, 48h) anchored at the point of rebound detection |
+| trading_floor unit | **[FIX]** Clarified trading_floor is expressed as % of total_portfolio value |
+| Kill switch drawdown | **[FIX]** Defined drawdown reference point as portfolio value at 00:00 UTC of the rolling window start |
+| Tax reporting | **[ADD]** Added explicit tax accounting and FIFO export requirements |
+| Slippage definition | **[FIX]** Corrected slippage formula — measured vs mid-price at order placement, not vs limit price |
 
 ## Changelog v1 → v2
 
@@ -98,9 +111,13 @@ Constraints:
 ```
 INV-1: core_btc_qty is monotonically non-decreasing
 INV-2: reserve_usdt >= reserve_floor (% of portfolio)
-INV-3: sum(buckets) == total_portfolio (no leak)
+INV-3: abs(sum(buckets) - total_portfolio) < EPSILON   # EPSILON = 1e-8 BTC
+        # Strict equality is infeasible due to floating-point arithmetic,
+        # partial fills in-flight, and unsettled fee accruals.
 INV-4: no order placed if it would violate INV-1 or INV-2
-INV-5: no sell order if price < avg_cost * (1 + min_profit_threshold)
+INV-5: no sell order placed if the FIFO lot price to be consumed < avg_cost_fifo_lot * (1 + min_profit_threshold)
+        # Note: uses cost of the specific lot being sold (FIFO head), NOT global avg_cost.
+        # This prevents selling a high-cost early lot at a loss even when global avg_cost is lower.
 INV-6: daily_deployed_capital <= daily_deployment_cap
 INV-7: total BTC on hot exchange <= hot_exchange_cap
 ```
@@ -133,7 +150,7 @@ Feature Engine
         ↓
 Regime Detection Layer (HMM / unsupervised)
         ↓
-Inventory Management Engine  ← Cost Basis Tracker
+Inventory Management Engine  ← Cost Basis Tracker (FIFO per-lot)
         ↓
 Adaptive Grid Engine
         ↓
@@ -180,11 +197,13 @@ Monitoring & Analytics
 
 **Strategy:** 3-phase ramp.
 
+> **[v2.1 FIX]** Percentages below are the authoritative values. AGENTS.md Section 2.10 must match these exactly. Any discrepancy defaults to this document.
+
 | Phase | Duration | Action |
 |---|---|---|
-| Phase B1 — Seed | Week 1 | Deploy 20% of target core immediately (market buy) |
-| Phase B2 — DCA ramp | Weeks 2–12 | DCA remaining 60% of target core on weekly schedule |
-| Phase B3 — Opportunistic | Weeks 4–26 | Reserve 20% of target core for dips >1σ below 90-day mean |
+| Phase B1 — Seed | Week 1 | Deploy **20% of total planned capital** immediately (market buy, split across core + trading seed) |
+| Phase B2 — DCA ramp | Weeks 2–12 | Deploy **60% of remaining capital** via weekly DCA schedule (~6% per week of remaining) |
+| Phase B3 — Opportunistic | Weeks 4–26 | Reserve **20% of total planned capital** for dips >1σ below 90-day mean; deploy adaptively |
 
 Trading bucket and reserve are built in parallel as core fills.
 
@@ -210,10 +229,13 @@ Can I predict the next candle?
 
 ## Cost Basis Tracker (required component)
 
-- Per-lot FIFO ledger of every BTC buy: `(qty, price, timestamp, regime_tag)`
-- Computes `avg_cost`, `realized_pnl_btc`, `unrealized_pnl_btc`
+- Per-lot FIFO ledger of every BTC buy: `(lot_id, qty, purchase_price, timestamp, regime_tag)`
+- Computes:
+  - `avg_cost_fifo_lot`: cost of the specific lot at FIFO head (used in INV-5 sell gating)
+  - `avg_cost_portfolio`: weighted average across all remaining lots (used in state/reporting)
+  - `realized_pnl_btc`, `unrealized_pnl_btc`
 - Persisted to DB; reconciled against exchange fills daily
-- Feeds sell-gating (INV-5)
+- Export-ready for tax reporting (see Section 19)
 
 ---
 
@@ -225,9 +247,10 @@ All buy/sell thresholds are defined relative to explicit anchors, not "price dro
 |---|---|---|
 | `A_trend` | EMA(200, daily) | Macro trend filter |
 | `A_range` | Rolling max(high, 30d) | Drawdown-from-peak trigger |
-| `A_vol` | ATR(14) / price | Adaptive grid spacing |
-| `A_cost` | Per-lot avg cost basis | Sell gating |
+| `A_vol` | ATR(14) / price | Adaptive grid spacing (proxy only; use σ_ann for grid sizing) |
+| `A_cost` | Per-lot FIFO cost basis | Sell gating (INV-5) |
 | `A_mean` | EMA(20, 4h) | Mean-reversion anchor |
+| `A_local_low` | Rolling min(low, 48h) | Rebound trigger reference — see Section 10 |
 
 A "drop of X%" is always `(A_anchor − price) / A_anchor` with the anchor specified in the rule.
 
@@ -268,17 +291,19 @@ Hard caps:
 
 ## Sell Logic (gated)
 
-| Rebound from local low | Base sell |
+**Definition of local low:** `A_local_low = rolling min(low, 48h)`, evaluated at the candle where rebound is detected. This anchor is fixed at detection time and does not update until a new sell cycle begins.
+
+| Rebound from `A_local_low` | Base sell |
 |---|---|
 | +4% | 10% of trading BTC |
 | +8% | 20% of trading BTC |
 | +12% | 30% of trading BTC |
 
 Gates (ALL must pass):
-1. `price > avg_cost × (1 + min_profit_threshold)` (default 1.5 × round-trip fee + slippage)
+1. `price > avg_cost_fifo_lot × (1 + min_profit_threshold)` — checks the FIFO lot to be consumed, not global avg
 2. Not in strong bull trend (regime_multiplier_sell applies)
 3. Sell never touches core bucket
-4. After sell, `trading_btc_qty` must remain ≥ `trading_floor`
+4. After sell, `trading_btc_qty` must remain ≥ `trading_floor` (expressed as % of total_portfolio)
 
 Sell regime multipliers:
 
@@ -300,15 +325,21 @@ core_btc_qty += excess
 trading_btc_qty −= excess
 ```
 
+> **[v2.1 NOTE]** The 7-day check is evaluated once per day at 00:00 UTC based on the end-of-day snapshot balance, not on intra-day ticks. This prevents race conditions from intra-day trading affecting the counter.
+
 This is **how core grows** over time. Excess is then swept to cold storage.
 
 ---
 
 # 11. Adaptive Grid System
 
-Grid spacing adapts to realized volatility.
+Grid spacing adapts to realized volatility. Use **30-day annualized realized volatility (σ_ann)** for grid spacing, not raw `A_vol` (ATR ratio).
 
-| Volatility regime (annualized σ) | Grid spacing (per level) |
+```
+σ_ann = std(daily_log_returns, window=30) × sqrt(365)
+```
+
+| Volatility regime (σ_ann) | Grid spacing (per level) |
 |---|---|
 | Low (< 40%) | 1–2% |
 | Medium (40–80%) | 3–5% |
@@ -327,9 +358,13 @@ Grid is rebuilt when:
 
 No human-labeled "panic" vs "bear" training data. Methods:
 
-1. **HMM (2-state, 3-state, 4-state)** on log-returns + realized vol
+1. **HMM (3-state or 5-state)** on log-returns + realized vol
+   - Use 3-state HMM as baseline; optionally expand to 5-state if validation improves
+   - Cluster indices are post-hoc mapped to semantic regimes based on centroid analysis
 2. **K-means clustering** on feature vector
 3. **Change-point detection** (Bayesian / BOCPD) for regime transitions
+
+> **[v2.1 NOTE]** The system defines 5 semantic regimes. HMM state count does not need to equal 5 — use the state count that produces the most stable classification (validated via AIC/BIC). Post-hoc semantic mapping from cluster indices to regime names is required after each retraining.
 
 Output regimes (emitted labels are just indices; human names come from post-hoc analysis):
 
@@ -454,7 +489,7 @@ state = [
     core_btc_ratio,
     trading_btc_ratio,
     reserve_ratio,
-    avg_cost_distance,          # (price - avg_cost) / avg_cost
+    avg_cost_distance,          # (price - avg_cost_fifo_lot) / avg_cost_fifo_lot
     unrealized_pnl_btc,
 
     # Constraints
@@ -478,16 +513,18 @@ state = [
 
 ## Kill Switches (automatic pause)
 
+**Drawdown definition:** Percentage decline from portfolio value at 00:00 UTC at the start of the rolling window (24h or 7d). Evaluated in BTC-equivalent terms at current BTC price.
+
 | Trigger | Action |
 |---|---|
-| Drawdown > 15% in 24h | Pause new buys, alert |
-| Drawdown > 25% in 7d | Pause all trading, manual resume |
+| Drawdown > 15% in 24h (vs 00:00 UTC snapshot) | Pause new buys, alert |
+| Drawdown > 25% in 7d (vs 00:00 UTC 7 days ago) | Pause all trading, manual resume |
 | Reserve < floor | Pause buys only |
 | Exchange API error rate > 5% in 5 min | Pause all, alert |
 | Stablecoin depeg > 2% | Freeze affected stable, rebalance |
 | Spread > 5× 30-day median | Pause all |
 | Funding rate > 0.3%/8h | Pause aggressive buys |
-| Unexpected fill (price slippage > 2%) | Halt, reconcile |
+| Fill slippage > 2% (vs mid-price at order placement) | Halt, reconcile |
 
 ## Circuit Breaker Reset
 
@@ -528,12 +565,31 @@ This is a real accumulation engine (earns yield without changing BTC exposure) b
 
 **Round-trip cost assumption: ~0.25%.** A swing must clear at least 2× this to be worth taking.
 
+## Slippage Measurement
+
+> **[v2.1 FIX]** Slippage is defined as deviation from the **mid-price at order placement time**, not from the limit price. Limit orders execute at limit price or better, so measuring vs limit price always yields zero — which is meaningless.
+
+```
+slippage = |executed_price - mid_price_at_placement| / mid_price_at_placement
+```
+
+This correctly captures market impact and timing cost for both limit and market orders.
+
 ## Tax Model
 
 - Each sell is a taxable event in most jurisdictions
 - Passive HODL benchmark pays tax only on terminal sale
 - Add `tax_drag` parameter (configurable by jurisdiction; default: short-term rate applied to realized gains per year)
 - Backtest must report both **pre-tax** and **after-tax** BTC accumulation
+
+## Tax Reporting Requirements
+
+> **[v2.1 ADD]** The FIFO ledger must support tax export. Required outputs:
+
+- Per-sell record: `(sell_date, sell_price, sell_qty, lot_purchase_date, lot_purchase_price, realized_pnl_usd, holding_period_days)`
+- Annual summary: total realized gains (short-term vs long-term by jurisdiction threshold)
+- Export format: CSV compatible with standard crypto tax tools (Koinly, CoinTracker schema)
+- Jurisdiction parameter in config; default assumes short-term = held < 365 days
 
 ## Sensitivity Analysis (required)
 
@@ -745,6 +801,7 @@ src/
 ## Unit Tests
 
 - Inventory math (add/remove lot, cost basis calc)
+- FIFO sell gating: verify INV-5 uses lot-level cost, not global avg_cost
 - Regime classifier output shape and stability
 - Grid rebuild determinism
 
@@ -752,8 +809,9 @@ src/
 
 Invariants tested over random inputs:
 - `INV-1`: no sequence of valid operations reduces core_btc
-- `INV-3`: portfolio sum conservation
+- `INV-3`: `abs(sum(buckets) - total_portfolio) < EPSILON` under all operations
 - Cost basis is consistent under permutation of identical lots (FIFO-aware)
+- Sell gate never allows a sell where lot cost > sell price after fees
 
 ## Replay Tests
 
@@ -776,7 +834,7 @@ Invariants tested over random inputs:
 **Goal:** Build inventory engine, adaptive DCA, dynamic grid. **No AI.**
 
 Deliverables:
-- Cost basis tracker
+- Cost basis tracker (FIFO, per-lot, tax-export ready)
 - Portfolio state machine with invariants enforced
 - Rule-based buy/sell logic
 - Backtest harness with fee + slippage model
@@ -828,7 +886,7 @@ Requirements:
 
 - Live data, simulated execution
 - Minimum 3 months, preferably 6
-- Track: latency, slippage, fill quality vs model
+- Track: latency, slippage (vs mid-price at placement), fill quality vs model
 
 Exit criteria:
 - Live paper performance within 20% of backtest expectation
