@@ -28,10 +28,10 @@
 | `INV-1` | `core_btc_qty` is monotonically non-decreasing | Any code path that could reduce it is a critical bug |
 | `INV-2` | `reserve_usdt >= reserve_floor` (% of portfolio) | Check against current portfolio value, not nominal |
 | `INV-3` | `abs(sum(buckets) - total_portfolio) < 1e-8 BTC` | Strict equality is infeasible due to float, partial fills, unsettled fees |
-| `INV-4` | No order placed if it would violate INV-1 or INV-2 | Pre-check before submitting to Risk Agent |
-| `INV-5` | No sell if `price < avg_cost_fifo_lot × (1 + min_profit_threshold)` | Use FIFO queue head lot cost — NOT global `avg_cost_portfolio` |
+| `INV-4` | No proposed order is sent to Risk Overlay if it would violate INV-1 or INV-2 | Pre-flight validation by Grid Engine; violations do not halt, they silently drop/trim orders |
+| `INV-5` | No sell if `price < avg_cost_fifo_lot × (1 + min_profit_threshold)` | Use FIFO queue head lot cost. Exception: >180 days holding allowed to skip/write-down. |
 | `INV-6` | `daily_deployed_capital <= daily_deployment_cap` | Resets at 00:00 UTC |
-| `INV-7` | `total BTC on hot exchange <= hot_exchange_cap` | 25% of total portfolio value |
+| `INV-7` | `total BTC on hot exchange <= hot_exchange_cap` | 25% of total portfolio value (BTC + USDT equivalent) |
 
 **INV-3 note:** `sum(buckets)` = `core_btc_qty` (in BTC) + `trading_btc_qty` (in BTC) + `reserve_usdt / btc_price`. All converted to BTC for comparison.
 
@@ -41,7 +41,7 @@
 
 ## 3. Kill Switches (Automatic HALT triggers)
 
-**Drawdown definition:** Percentage decline from portfolio BTC-equivalent value at 00:00 UTC at the start of the rolling window.
+**Drawdown definition:** Percentage decline from portfolio value in USD terms at 00:00 UTC at the start of the rolling window. Portfolio drawdown and asset drawdown are tracked independently in USD terms.
 
 | Trigger | Threshold | Action |
 |---|---|---|

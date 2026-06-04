@@ -12,12 +12,12 @@ All values configured in `config/production.json`. Loaded once at startup — im
 |---|---|---|---|
 | `reserve_floor` | 10–20% | Risk Agent | Min USDT reserve as % of total portfolio value |
 | `daily_deployment_cap` | 5–10% | Risk Agent | Max % of portfolio deployed in new buy orders per 24h |
-| `hot_exchange_cap` | 25% | Risk Agent | Max exchange-held BTC as % of total portfolio value |
-| `min_profit_threshold` | ~0.375% | Grid, Risk | Min sell profit = 1.5× round-trip cost. Applied to FIFO lot cost. |
+| `hot_exchange_cap` | 25% | Risk Agent | Max exchange-held BTC as % of total portfolio value (in BTC/USDT terms) |
+| `min_profit_threshold` | ~0.375% | Grid, Risk | Min sell profit. Applied to FIFO lot cost. |
 | `core_btc_target` | 60–80% | Inventory | Long-term target allocation for Core BTC |
 | `trading_target` | 10–25% | Inventory | Swing inventory target allocation |
 | `trading_floor` | 5% of total_portfolio | Grid | Min trading sleeve before sell sizing is blocked. Expressed as % of total portfolio value. |
-| `promotion_threshold` | 1.3× trading_target | Inventory | Trigger for core transfer if held 7 consecutive daily snapshots |
+| `promotion_threshold` | 1.3× trading_target | Inventory | Trigger for core transfer if held 7 consecutive daily snapshots (or 5 of last 7 if interrupted by sales) |
 | `inv3_epsilon` | 1e-8 BTC | Risk | Tolerance for INV-3 balance conservation check |
 
 ---

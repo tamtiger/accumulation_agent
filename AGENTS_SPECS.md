@@ -121,7 +121,7 @@
 
 ## 5. Adaptive Grid Agent
 
-**Role:** Compute proposed buy/sell order grid using volatility, regime, and anchors. All orders are unsigned proposals — Risk Agent approves.
+**Role:** Compute proposed buy/sell order grid using volatility, regime, and anchors. All orders are unsigned proposals — Grid Agent performs pre-flight validation and trims/rejects orders that would violate INV-1 or INV-2 (INV-4 rule) before submitting to Risk Agent.
 
 **Rules:**
 
@@ -151,16 +151,16 @@
    | Panic Dump | 1.5 – 2.0 |
    | Sideways | 1.0 |
    | Bull Trend | 0.8 |
-   | Bear Trend | 0.3 – 0.5 |
+   | Bear Trend | 1.0 – 1.2 (aggressive buys at low prices) |
    | Blowoff Top | 0.0 (buys disabled) |
 
    ```
    effective_deploy = base_deploy × regime_multiplier
    ```
 
-3. **Sell Gating** — ALL conditions must pass before proposing a sell:
+3. **Sell Gating & Accumulation Guard** — ALL conditions must pass before proposing a sell:
 
-   `A_local_low` = `rolling min(low, 48h)`, fixed at the candle where rebound is first detected. Do not update mid-cycle.
+   `A_local_low` = `rolling min(low, 48h)`, fixed at the candle where rebound is first detected. A sell cycle ends when a sell is executed, price falls below `A_local_low`, or 48 hours pass without execution.
 
    | Rebound from A_local_low | Base sell |
    |---|---|
@@ -175,30 +175,35 @@
    | Blowoff Top | 1.5 |
    | Bull Trend | 0.3 |
    | Sideways | 1.0 |
-   | Bear Trend | 0.8 |
+   | Bear Trend | 0.3 – 0.5 (reduced to hold cheap coins) |
    | Panic Dump | 0.0 (sells disabled) |
 
-   Pre-flight checks (suppress order if any fail):
-   - `target_sell_price >= avg_cost_fifo_lot × (1 + min_profit_threshold)` — FIFO head lot cost, not portfolio avg
+   **Accumulation Guard:**
+   ```
+   effective_sell_btc = min(proposed_sell_btc, net_btc_accumulated_current_cycle)
+   ```
+
+   Pre-flight checks (suppress or trim order if any fail — INV-4 pre-flight role):
+   - `target_sell_price >= avg_cost_fifo_lot × (1 + min_profit_threshold)` (FIFO head lot cost, subject to v2.1 180-day holding skip/write-down exception)
    - `trading_btc_qty` after sell remains `≥ trading_floor` (trading_floor = % of total_portfolio)
    - Sell never touches `core_btc_qty`
+   - Adjusts/trims order values so they do not violate reserve floor or core non-decreasing constraints
 
 ---
 
 ## 6. Risk Overlay & Invariant Agent
 
-**Role:** Final safety gate before any order reaches the exchange. Validate all invariants. Trigger HALT on violation. No bypass exists.
+**Role:** Final safety gate before any order reaches the exchange. Validate all invariants. Trigger HALT on actual state violation. Pre-flight order blocks (INV-4) are filtered at the Grid Agent level, so any violation that reaches Risk Overlay triggers a system halt.
 
 **Rules:**
 
-1. **Invariant Verification** — check all 7 against proposed order array:
+1. **Invariant Verification** — check invariants against proposed order array and current state:
    - `INV-1`: `core_btc_qty` does not decrease
-   - `INV-2`: `reserve_usdt` stays ≥ `reserve_floor` after order
+   - `INV-2`: `reserve_usdt` stays ≥ `reserve_floor` after order execution
    - `INV-3`: `abs(sum(buckets) - total_portfolio) < 1e-8 BTC`
-   - `INV-4`: Reject any order that would violate INV-1 or INV-2
-   - `INV-5`: Reject sell if `price < avg_cost_fifo_lot × (1 + min_profit_threshold)`
+   - `INV-5`: Reject sell if `price < avg_cost_fifo_lot × (1 + min_profit_threshold)` (unconditional check on actual order execution)
    - `INV-6`: Cumulative daily deploy ≤ `daily_deployment_cap`
-   - `INV-7`: Total exchange BTC ≤ `hot_exchange_cap`
+   - `INV-7`: Total exchange BTC ≤ `hot_exchange_cap` (defined as 25% of total portfolio value)
 
 2. **Kill Switch Monitoring:** See `AGENTS_SAFETY.md` §3 for full trigger table and §4 for HALT procedure. On any trigger → execute HALT immediately.
 
@@ -278,5 +283,5 @@
    | Phase | Duration | Action |
    |---|---|---|
    | B1 — Seed | Week 1 | Deploy 20% of total planned capital immediately (market buys, split core seed + trading floor) |
-   | B2 — DCA Ramp | Weeks 2–12 | Deploy 60% of total planned capital via weekly DCA (~6% of remaining per week) until core reaches 60–80% |
+   | B2 — DCA Ramp | Weeks 2–12 | Deploy 60% of total planned capital via weekly DCA (exactly 5.45% of total planned capital per week for 11 weeks) until core reaches target steady-state |
    | B3 — Opportunistic | Weeks 4–26 | Reserve 20% of total planned capital for dips >1σ below 90-day mean; full adaptive system active |

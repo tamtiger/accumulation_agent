@@ -45,18 +45,16 @@ accumulation_agent/
 └── README.md                 # Quick-start (Vietnamese)
 ```
 
----
-
 ## 2. Key Files
 
 | File | Why it matters |
 |---|---|
-| `src/inventory/fifo_ledger.py` | Core FIFO logic — changes here affect INV-5 directly |
-| `src/risk/invariants.py` | Hard-coded invariant checks — the final safety gate |
+| `src/inventory/ledger.py` | Core FIFO logic — changes here affect INV-5 directly |
+| `src/risk/overlay.py` | Hard-coded invariant checks — the final safety gate |
 | `src/execution/orchestrator.py` | Tick loop, agent coordination, bootstrapping phases |
-| `src/regime/classifier.py` | HMM + K-means model, hysteresis filter |
+| `src/regime/__init__.py` | Target package for HMM + K-means model |
 | `config/production.json` | All tunable parameters |
-| `tests/property/test_invariants.py` | INV-1, INV-3, sell gating property tests |
+| `tests/test_risk.py` | INV-1, INV-3, sell gating property tests |
 
 ---
 

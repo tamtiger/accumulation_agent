@@ -1,0 +1,12 @@
+runtime: python
+commands:
+  install: "pip install -e ."
+  build: null
+  test: "pytest"
+  lint: "ruff check ."
+  typecheck: "mypy ."
+  # security_audit: "bandit -r ."
+  # simplify: null
+timeouts:
+  build: 60
+  test: 300

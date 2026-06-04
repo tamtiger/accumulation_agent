@@ -139,25 +139,24 @@ INV-1: core_btc_qty is monotonically non-decreasing
 INV-2: reserve_usdt >= reserve_floor (% of portfolio)
 
 # INV-3: Tổng tài sản trong tất cả các giỏ cộng lại phải bằng chính xác tổng danh mục.
-# Mục đích: Kiểm tra rò rỉ dữ liệu hoặc lỗi tính toán.
-INV-3: sum(buckets) == total_portfolio (no leak)
+# Mục đích: Kiểm tra rò rỉ dữ liệu hoặc lỗi tính toán (sai số cho phép EPSILON = 1e-8 BTC).
+INV-3: abs(sum(buckets) - total_portfolio) < 1e-8 BTC
 
-# INV-4: Không đặt lệnh mua/bán nếu nó làm vi phạm INV-1 hoặc INV-2.
-# Mục đích: Chặn các lệnh sai lầm từ AI hoặc logic giao dịch.
-INV-4: no order placed if it would violate INV-1 or INV-2
+# INV-4: Grid Engine thực hiện kiểm tra trước (pre-flight); các lệnh vi phạm sẽ bị từ chối/cắt giảm trong im lặng và KHÔNG gây dừng hệ thống.
+INV-4: no order is proposed by the Grid Engine if it would violate INV-1 or INV-2
 
-# INV-5: Không đặt lệnh bán nếu giá thấp hơn giá vốn trung bình cộng biên lãi.
-# Mục đích: Cấm tuyệt đối việc bán lỗ Bitcoin.
-INV-5: no sell order if price < avg_cost * (1 + min_profit_threshold)
+# INV-5: Không đặt hoặc thực hiện lệnh bán nếu giá thấp hơn giá vốn trung bình cộng biên lãi của lô FIFO đầu hàng đợi.
+# [EXCEPTION v2.1]: Nếu một lô được giữ > 180 ngày mà không đạt ngưỡng chốt lời, nó có thể được bỏ qua hoặc điều chỉnh giảm giá vốn để tránh làm khóa dòng FIFO.
+INV-5: no sell order proposed or executed if price < avg_cost_fifo_lot * (1 + min_profit_threshold)
 
-# INV-6: Vốn giải ngân mỗi ngày không được vượt quá hạn mức (ví dụ 10%).
-# Mục đích: Ngăn chặn việc mua quá nhanh (FOMO) khi giá đang giảm.
+# INV-6: Vốn giải ngân mỗi ngày không được vượt quá hạn mức (ví dụ 5-10% tổng danh mục).
 INV-6: daily_deployed_capital <= daily_deployment_cap
 
-# INV-7: Tổng BTC trên ví nóng của sàn không được vượt quá hạn mức an toàn.
-# Mục đích: Giảm thiểu thiệt hại nếu sàn bị hack.
+# INV-7: Tổng BTC trên ví nóng của sàn không được vượt quá hạn mức an toàn (xác định bằng 25% tổng giá trị danh mục).
 INV-7: total BTC on hot exchange <= hot_exchange_cap
 ```
+
+Quy tắc bất biến INV-1, INV-2, INV-3, INV-5 (không bao gồm ngoại lệ thời gian), INV-6 và INV-7 là các **quy tắc cứng** được kiểm tra tại lớp Risk Overlay — vi phạm sẽ ngay lập tức kích hoạt dừng khẩn cấp (halt) toàn hệ thống. Các đề xuất lệnh không đạt INV-4 (pre-flight check) chỉ bị từ chối hoặc cắt giảm quy mô trong im lặng ở Grid Engine/Orchestrator để tránh gây dừng hệ thống không mong muốn.
 
 ### [MÔ PHỎNG KIỂM THỬ QUY TẮC BẤT BIẾN]
 
@@ -248,9 +247,9 @@ Hệ thống chia tài sản của bạn thành 3 "túi" tiền riêng biệt:
 
 | Giai đoạn | Thời gian | Hành động | Giải thích ý nghĩa |
 |---|---|---|---|
-| **Giai đoạn B1 — Gieo hạt** | Tuần 1 | Mua ngay lập tức 20% lượng BTC mục tiêu. | Đảm bảo bạn "có hàng" ngay lập tức để không bị lỡ sóng nếu giá bay luôn. |
-| **Giai đoạn B2 — DCA dốc** | Tuần 2–12 | Mua đều đặn 60% tiếp theo trong vòng 3 tháng (mỗi tuần mua một ít). | Giúp bạn có mức giá trung bình ổn định, không lo đỉnh hay đáy ngắn hạn. |
-| **Giai đoạn B3 — Cơ hội** | Tuần 4–26 | Giữ lại 20% cuối cùng để chờ những cú sập mạnh (>15-20%). | Đây là "đòn quyết định" giúp bạn mua được hàng cực rẻ khi có biến cố lớn. |
+| **Giai đoạn B1 — Gieo hạt** | Tuần 1 | Mua ngay lập tức 20% lượng vốn đầu tư dự kiến. | Đảm bảo bạn "có hàng" ngay lập tức để không bị lỡ sóng nếu giá bay luôn. |
+| **Giai đoạn B2 — DCA dốc** | Tuần 2–12 | Mua đều đặn 60% tổng vốn đầu tư dự kiến (chính xác 5.45% tổng vốn mỗi tuần trong 11 tuần). | Giúp bạn có mức giá trung bình ổn định, không lo đỉnh hay đáy ngắn hạn. |
+| **Giai đoạn B3 — Cơ hội** | Tuần 4–26 | Giữ lại 20% tổng vốn dự kiến để chờ những cú sập mạnh (>1σ dưới đường trung bình 90 ngày; triển khai thích ứng). | Đây là "đòn quyết định" giúp bạn mua được hàng cực rẻ khi có biến cố lớn. |
 
 - **Xây dựng song song:** Giỏ giao dịch (Trading bucket) và quỹ dự trữ (Reserve) được xây dựng song song trong quá trình lấp đầy giỏ Lõi (Core).
 
@@ -328,7 +327,7 @@ Bảng giải ngân dự trữ cơ bản (tính theo % của **số dư dự tr�
 | **Panic dump (trong sóng tăng)** | 1.5 – 2.0 | Tăng mạnh lượng mua vì đây là cơ hội bắt đáy hiếm có. |
 | **Sideways (Đi ngang)** | 1.0 | Giữ nguyên lộ trình mua tiêu chuẩn. |
 | **Bull trend (Sóng tăng)** | 0.8 | Hạn chế mua vì giá đang đắt. |
-| **Bear trend (Sóng giảm)** | 0.3 – 0.5 | Mua rất ít để giữ tiền mặt chờ đáy sâu hơn. |
+| **Bear trend (Sóng giảm)** | 1.0 – 1.2 | Tăng lượng mua để chủ động gom BTC giá rẻ. |
 | **Blowoff top (Đỉnh hưng phấn)** | 0.0 | **Dừng mua hoàn toàn.** |
 
 **Các giới hạn cứng (Hard caps):**
@@ -336,9 +335,9 @@ Bảng giải ngân dự trữ cơ bản (tính theo % của **số dư dự tr�
 - Không mua nếu tiền mặt dưới mức sàn `reserve_floor`.
 - Không mua nếu công tắc ngắt (kill switch) đang được kích hoạt.
 
-## 10.2. Logic Bán (Sell Logic - Có cổng kiểm soát)
+## 10.2. Logic Bán (Sell Logic - Gated với Accumulation Guard)
 
-**Định nghĩa về đáy cục bộ (local low):** `A_local_low = rolling min(low, 48h)`, được đánh giá tại cây nến phát hiện sự phục hồi. Mốc tham chiếu này được cố định tại thời điểm phát hiện và không cập nhật cho đến khi một chu kỳ bán mới bắt đầu.
+**Định nghĩa về đáy cục bộ (local low):** `A_local_low = rolling min(low, 48h)`, được đánh giá tại cây nến phát hiện sự phục hồi. Mốc tham chiếu này được cố định tại thời điểm phát hiện và không cập nhật cho đến khi chu kỳ bán kết thúc. Chu kỳ bán kết thúc khi: (a) một lệnh bán được thực thi, (b) giá giảm xuống dưới `A_local_low`, hoặc (c) sau 48 giờ liên tục không có lệnh bán nào khớp (khi đó `A_local_low` được đặt lại về đáy 48 giờ hiện tại).
 
 | Mức hồi phục từ `A_local_low` | Lượng bán cơ bản |
 |---|---|
@@ -346,8 +345,15 @@ Bảng giải ngân dự trữ cơ bản (tính theo % của **số dư dự tr�
 | +8% | 20% lượng BTC giao dịch |
 | +12% | 30% lượng BTC giao dịch |
 
+**Bộ bảo vệ tích lũy (Accumulation Guard):**
+Để ngăn việc bán nhiều BTC hơn lượng đã gom vào (gây giảm ròng BTC trong chu kỳ), lượng bán đề xuất sẽ bị giới hạn bởi Lượng tích lũy ròng trong chu kỳ hiện tại:
+```
+effective_sell_btc = min(proposed_sell_btc, net_btc_accumulated_current_cycle)
+```
+Trong đó, `net_btc_accumulated_current_cycle` là tổng lượng BTC đã mua trong chu kỳ sụt giảm-hồi phục hiện tại (tính từ khi giá giảm xuống dưới `A_range` quá 3%) trừ đi lượng BTC đã bán trước đó trong cùng một chu kỳ này.
+
 **Các cổng chặn (Gates) — Phải thỏa mãn TẤT CẢ mới được bán:**
-1.  `giá > avg_cost_fifo_lot × (1 + ngưỡng_lãi_tối_thiểu)` — kiểm tra lô FIFO sẽ được tiêu thụ, không phải giá trung bình toàn cầu.
+1.  `giá > avg_cost_fifo_lot × (1 + ngưỡng_lãi_tối_thiểu)` — kiểm tra lô FIFO sẽ được tiêu thụ (hỗ trợ ngoại lệ v2.1 nắm giữ > 180 ngày).
 2.  Không nằm trong xu hướng tăng mạnh (Áp dụng hệ số nhân bán theo trạng thái).
 3.  Lệnh bán **không bao giờ** được chạm vào giỏ Lõi (Core bucket).
 4.  Sau khi bán, lượng BTC giao dịch còn lại phải ≥ mức sàn `trading_floor` (được biểu thị dưới dạng % của total_portfolio).
@@ -356,12 +362,13 @@ Bảng giải ngân dự trữ cơ bản (tính theo % của **số dư dự tr�
 - **Blowoff top:** 1.5 (Bán mạnh hơn để chốt lãi).
 - **Bull trend:** 0.3 (Bán rất ít để gồng lãi dài hơn).
 - **Sideways:** 1.0 (Bán theo kế hoạch).
-- **Bear trend:** 0.8 (Bán để thu hồi vốn nhanh).
+- **Bear trend:** 0.3 – 0.5 (Hạn chế bán để nắm giữ tài sản mua được ở giá thấp).
 - **Panic dump:** 0.0 (**Tuyệt đối không bán** khi mọi người đang hoảng loạn tháo chạy).
 
-## 10.3. Quy tắc thăng hạng Lõi (Core Promotion Rule)
+## 10.3. Quy tắc Thăng hạng Lõi & Tái cân bằng (Core Promotion & Rebalancing)
 
-Khi lượng BTC giao dịch (`trading_btc_qty`) vượt quá mục tiêu (`trading_target`) hơn 30% trong vòng ít nhất 7 ngày, phần thặng dư sẽ được thăng hạng:
+**Quy tắc thăng hạng Lõi (Core Promotion Rule):**
+Khi lượng BTC giao dịch (`trading_btc_qty`) vượt quá mục tiêu (`trading_target`) hơn 30% trong vòng ít nhất 7 ngày (đánh giá ở snapshot 00:00 UTC hàng ngày, hoặc nếu bị gián đoạn bởi lệnh bán thì đạt ít nhất 5 trên 7 ngày snapshot gần nhất), phần thặng dư sẽ được thăng hạng và chuyển về ví lạnh:
 
 ```python
 phần_thừa = trading_btc_qty − trading_target
@@ -369,9 +376,11 @@ core_btc_qty += phần_thừa
 trading_btc_qty −= phần_thừa
 ```
 
-> **[LƯU Ý v2.1]** Việc kiểm tra 7 ngày được đánh giá mỗi ngày một lần vào lúc 00:00 UTC dựa trên số dư ảnh chụp nhanh cuối ngày (end-of-day snapshot balance), chứ không dựa trên các tick trong ngày. Điều này ngăn ngừa các xung đột tranh đoạt (race conditions) từ giao dịch trong ngày ảnh hưởng đến bộ đếm.
-
-Đây chính là cơ chế **giúp giỏ Lõi tăng trưởng** theo thời gian. Phần BTC thặng dư này sau đó sẽ được quét (sweep) về ví lạnh.
+**Quy tắc Tái cân bằng (Replenish Reserve Rule):**
+Khi lệnh bán chốt lời khớp, nguồn vốn USDT thu về sẽ được tự động phân bổ:
+- **Tái nạp Reserve:** 30% lợi nhuận thực tế (P&L tính bằng USDT) được chuyển lại về giỏ USDT Reserve để tích lũy.
+- **Tái đầu tư Trading:** 70% còn lại giữ ở giỏ Trading. Nếu `trading_btc_qty < trading_target`, số tiền này được giữ làm cash chờ mua hoặc chuyển đổi tự động lại thành BTC trên các mức lưới.
+- **Khôi phục khẩn cấp:** Nếu `reserve_usdt < reserve_floor` do drawdown kéo dài, 100% doanh thu bán sẽ được nạp trực tiếp vào USDT Reserve cho đến khi khôi phục về mức sàn quy định.
 
 ---
 

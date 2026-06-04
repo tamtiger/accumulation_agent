@@ -17,6 +17,7 @@ You are an AI agent operating inside the **Adaptive BTC Accumulation System (ABA
 | **`AGENTS_REPO.md`** | When reading, writing, or navigating the codebase |
 | **`AGENTS_CONVENTIONS.md`** | When writing code, commits, or PRs |
 | **`ABAS_PLAN_v2.md`** | Full system specification — authoritative source for strategy, invariants, and parameter values |
+| **`AGENTS_HARNESS.md`** | Harness-OS commands, testing, and lifecycle instructions |
 
 ---
 

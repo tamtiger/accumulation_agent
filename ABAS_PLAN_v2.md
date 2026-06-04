@@ -112,17 +112,15 @@ Constraints:
 INV-1: core_btc_qty is monotonically non-decreasing
 INV-2: reserve_usdt >= reserve_floor (% of portfolio)
 INV-3: abs(sum(buckets) - total_portfolio) < EPSILON   # EPSILON = 1e-8 BTC
-        # Strict equality is infeasible due to floating-point arithmetic,
-        # partial fills in-flight, and unsettled fee accruals.
-INV-4: no order placed if it would violate INV-1 or INV-2
-INV-5: no sell order placed if the FIFO lot price to be consumed < avg_cost_fifo_lot * (1 + min_profit_threshold)
+INV-4: no order is proposed by the Grid Engine if it would violate INV-1 or INV-2 (pre-flight validation in Grid Engine; violates do not halt, they silently reject/trim proposed orders)
+INV-5: no sell order proposed or executed if the FIFO lot price to be consumed < avg_cost_fifo_lot * (1 + min_profit_threshold)
         # Note: uses cost of the specific lot being sold (FIFO head), NOT global avg_cost.
-        # This prevents selling a high-cost early lot at a loss even when global avg_cost is lower.
+        # [v2.1 EXCEPTION]: If a lot is held for > 180 days without meeting the threshold, it can be skipped or written-down via a tax-loss harvesting rule to avoid locking the FIFO queue.
 INV-6: daily_deployed_capital <= daily_deployment_cap
-INV-7: total BTC on hot exchange <= hot_exchange_cap
+INV-7: total BTC on hot exchange <= hot_exchange_cap (where hot_exchange_cap is defined as 25% of total portfolio value in BTC/USDT terms)
 ```
 
-These are **hard asserts** — violation halts the system.
+Invariants INV-1, INV-2, INV-3, INV-5 (without exception), INV-6, and INV-7 are **hard asserts** verified at the Risk Overlay level — violation halts the system. Proposed orders that fail INV-4 (pre-flight checks) are silently dropped or trimmed by the Grid Engine/Orchestrator to avoid halts.
 
 ---
 
@@ -152,9 +150,9 @@ Regime Detection Layer (HMM / unsupervised)
         ↓
 Inventory Management Engine  ← Cost Basis Tracker (FIFO per-lot)
         ↓
-Adaptive Grid Engine
+Adaptive Grid Engine (performs INV-4 pre-flight checks & order trimming)
         ↓
-Risk Overlay  ← Kill Switch / Circuit Breakers
+Risk Overlay  ← Kill Switch / Circuit Breakers (enforces hard assertions)
         ↓
 Execution Engine
         ↓
@@ -186,7 +184,7 @@ Monitoring & Analytics
 ## Custody Policy
 
 - Core BTC: **cold wallet**, multisig or hardware
-- Sweep rule: when hot-exchange BTC > `hot_exchange_cap` (e.g., 25% of total BTC), auto-transfer excess to cold
+- Sweep rule: when hot-exchange BTC > `hot_exchange_cap` (defined as 25% of total portfolio value), auto-transfer excess to cold
 - API keys: trade-only, withdrawal disabled, IP-whitelisted
 
 ---
@@ -202,7 +200,7 @@ Monitoring & Analytics
 | Phase | Duration | Action |
 |---|---|---|
 | Phase B1 — Seed | Week 1 | Deploy **20% of total planned capital** immediately (market buy, split across core + trading seed) |
-| Phase B2 — DCA ramp | Weeks 2–12 | Deploy **60% of remaining capital** via weekly DCA schedule (~6% per week of remaining) |
+| Phase B2 — DCA ramp | Weeks 2–12 | Deploy **60% of total planned capital** via weekly DCA schedule (exactly 5.45% of total planned capital per week for 11 weeks) |
 | Phase B3 — Opportunistic | Weeks 4–26 | Reserve **20% of total planned capital** for dips >1σ below 90-day mean; deploy adaptively |
 
 Trading bucket and reserve are built in parallel as core fills.
@@ -281,7 +279,7 @@ effective_deploy = base_deploy × regime_multiplier(regime)
 | Panic dump (within bull) | 1.5–2.0 |
 | Sideways | 1.0 |
 | Bull trend | 0.8 |
-| Bear trend | 0.3–0.5 |
+| Bear trend | 1.0–1.2 (increased to buy cheaper BTC aggressively) |
 | Blowoff top | 0.0 (no buys) |
 
 Hard caps:
@@ -289,9 +287,9 @@ Hard caps:
 - No buy below `reserve_floor`
 - No buy if kill switch active
 
-## Sell Logic (gated)
+## Sell Logic (gated with Accumulation Guard)
 
-**Definition of local low:** `A_local_low = rolling min(low, 48h)`, evaluated at the candle where rebound is detected. This anchor is fixed at detection time and does not update until a new sell cycle begins.
+**Definition of local low:** `A_local_low = rolling min(low, 48h)`, evaluated at the candle where rebound is detected. This anchor is fixed at detection time and does not update until the sell cycle ends. A sell cycle is defined as ending when: (a) a sell order is executed, (b) price falls below `A_local_low`, or (c) 48 hours pass without any sell execution (at which point `A_local_low` is reset to the current 48h low).
 
 | Rebound from `A_local_low` | Base sell |
 |---|---|
@@ -299,8 +297,15 @@ Hard caps:
 | +8% | 20% of trading BTC |
 | +12% | 30% of trading BTC |
 
+**Accumulation Guard:**
+To prevent selling more BTC than accumulated and causing a net BTC loss over a cycle, the proposed sell size in BTC is capped by the Net Accumulated BTC in the current cycle:
+```
+effective_sell_btc = min(proposed_sell_btc, net_btc_accumulated_current_cycle)
+```
+Where `net_btc_accumulated_current_cycle` is the sum of BTC bought during the current drawdown-rebound cycle (since price last dropped below `A_range` by >3%) minus any BTC already sold during this same cycle.
+
 Gates (ALL must pass):
-1. `price > avg_cost_fifo_lot × (1 + min_profit_threshold)` — checks the FIFO lot to be consumed, not global avg
+1. `price > avg_cost_fifo_lot × (1 + min_profit_threshold)` — checks the FIFO lot to be consumed, not global avg (subject to v2.1 180-day skip/write-down exception)
 2. Not in strong bull trend (regime_multiplier_sell applies)
 3. Sell never touches core bucket
 4. After sell, `trading_btc_qty` must remain ≥ `trading_floor` (expressed as % of total_portfolio)
@@ -312,12 +317,13 @@ Sell regime multipliers:
 | Blowoff top | 1.5 |
 | Bull trend | 0.3 |
 | Sideways | 1.0 |
-| Bear trend | 0.8 |
+| Bear trend | 0.3–0.5 (reduced to hold onto cheap BTC) |
 | Panic dump | 0.0 (no sells) |
 
-## Core Promotion Rule
+## Core Promotion & Rebalancing Rules
 
-When `trading_btc_qty > trading_target × 1.3` for ≥7 days, the excess is promoted:
+**Promotion Rule:**
+When `trading_btc_qty > trading_target × 1.3` for ≥7 days (evaluated at daily snapshots at 00:00 UTC, or if consecutive daily count is interrupted by a sell order, 5 out of 7 days), the excess is promoted:
 
 ```
 excess = trading_btc_qty − trading_target
@@ -325,9 +331,13 @@ core_btc_qty += excess
 trading_btc_qty −= excess
 ```
 
-> **[v2.1 NOTE]** The 7-day check is evaluated once per day at 00:00 UTC based on the end-of-day snapshot balance, not on intra-day ticks. This prevents race conditions from intra-day trading affecting the counter.
-
 This is **how core grows** over time. Excess is then swept to cold storage.
+
+**Rebalancing (Reserve Replenishment) Rule:**
+When a sell order is executed and profit is realized, the USDT proceeds are allocated dynamically:
+- **USDT Reserve Allocation:** 30% of realized P&L (in USDT terms) is routed back to the USDT Reserve bucket to replenish it.
+- **Trading/Core Rebalancing:** The remaining 70% remains in the trading bucket. If `trading_btc_qty < trading_target`, it is kept as cash or auto-converted back to BTC trading inventory on a passive grid level.
+- **USDT Reserve Rebalance:** If `reserve_usdt < reserve_floor` due to a prolonged drawdown, 100% of realized sell proceeds are routed to the USDT Reserve bucket until it is restored to `reserve_floor`.
 
 ---
 
