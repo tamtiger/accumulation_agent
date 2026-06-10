@@ -1,5 +1,4 @@
 import logging
-import psycopg2
 from psycopg2.pool import SimpleConnectionPool
 from src.config import settings
 

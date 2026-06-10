@@ -1,5 +1,3 @@
-import logging
-from typing import Dict, Any
 from src.utils.logging import get_agent_logger
 
 logger = get_agent_logger("portfolio_agent")

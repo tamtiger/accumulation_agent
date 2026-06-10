@@ -1,6 +1,5 @@
 import os
-import json
-from src.config import Settings, load_settings
+from src.config import Settings
 from src.utils.logging import setup_logging, get_agent_logger
 
 def test_config_default_values():

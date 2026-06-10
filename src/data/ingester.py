@@ -1,5 +1,4 @@
 import json
-import logging
 import uuid
 from typing import Any, Dict, Optional
 import ccxt

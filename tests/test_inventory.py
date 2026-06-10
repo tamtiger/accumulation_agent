@@ -3,7 +3,6 @@ from unittest.mock import patch
 import pytest
 from hypothesis import given, strategies as st
 from src.inventory.ledger import FIFOLedger
-from src.inventory.models import TradeLot
 
 # Mock repository to prevent DB execution during tests
 @pytest.fixture(autouse=True)
@@ -80,7 +79,7 @@ def test_hypothesis_fifo_conservation(buys, sell_fraction):
     # Sell a fraction of total bought quantity
     sell_qty = total_bought_qty * sell_fraction
     sell_price = 150000.0
-    pnl = ledger.consume_sell_lots(sell_qty, sell_price, now, "sell_order")
+    ledger.consume_sell_lots(sell_qty, sell_price, now, "sell_order")
     
     # Verify conservation: final BTC qty must match original minus sold
     assert abs(ledger.trading_btc_qty - (total_bought_qty - sell_qty)) < 1e-7

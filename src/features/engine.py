@@ -2,7 +2,6 @@ import logging
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Optional
-from src.config import settings
 from src.utils.db import get_connection, release_connection
 
 logger = logging.getLogger("feature_agent")

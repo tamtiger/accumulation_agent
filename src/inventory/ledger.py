@@ -1,7 +1,7 @@
 import datetime
 import csv
 from src.utils.logging import get_agent_logger
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List
 from src.inventory.models import TradeLot, InventoryRepository
 
 logger = get_agent_logger("inventory_ledger")

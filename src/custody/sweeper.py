@@ -1,5 +1,3 @@
-import datetime
-import logging
 from typing import Optional
 from src.config import settings
 from src.utils.db import get_connection, release_connection

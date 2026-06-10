@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 class DataGapError(Exception):
     """Raised when there is a missing interval in the market data sequence."""

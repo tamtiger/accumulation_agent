@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.1] - 2026-06-10
+
+### Added
+- **Harness Integration**:
+  - Initialized Harness-OS configurations under `.harness/` (including `verify.yaml`, `config.yaml`, `feature_list.json`, `repo-summary.md`, and `scope.yaml`).
+  - Added [AGENTS_HARNESS.md](AGENTS_HARNESS.md) outlining testing, verification, and lifecycle instructions.
+
+### Changed & Fixed
+- **System Specification Update (v2.1)**:
+  - Updated [ABAS_PLAN_v2.md](ABAS_PLAN_v2.md) and [ABAS_PLAN_v2_VI.md](ABAS_PLAN_v2_VI.md) to address core logic flaws from the plan review (including the Buy/Sell basis asymmetry, FIFO head lock mitigation with the 180-day exception, corrected bear market multipliers, and definition of `A_local_low` reset conditions).
+- **Code Cleanups & Refactoring**:
+  - Removed unused imports (such as `os` and `logging`) and standardized formatting across codebase files (including [src/config.py](src/config.py), [src/risk/overlay.py](src/risk/overlay.py), [src/custody/sweeper.py](src/custody/sweeper.py), and related tests).
+  - Normalized line endings to CRLF for Windows compatibility.
+
 ## [2.1.0] - 2026-05-25
 
 ### Added

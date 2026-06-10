@@ -1,10 +1,8 @@
-import datetime
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from src.backtest.harness import BacktestHarness
-from src.risk.overlay import ProposedOrder
 
 @pytest.fixture
 def mock_db_and_orchestrator():
@@ -49,7 +47,7 @@ def test_backtest_harness_run(mock_db_and_orchestrator):
     # Mock the feature engine to return predefined features matching the latest price
     # so we don't have to populate a real SQL db in the mock test
     def mock_compute_latest_features(limit=500):
-        current_close = harness.orchestrator.exchange.orders.values()
+        harness.orchestrator.exchange.orders.values()
         # just return standard mock features
         return {
             "close": df.iloc[-1]["close"],

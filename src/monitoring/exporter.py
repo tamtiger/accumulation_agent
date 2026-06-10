@@ -1,8 +1,6 @@
-import logging
 import urllib.request
 import urllib.parse
 import json
-from typing import Dict, Any, Optional
 from prometheus_client import Gauge, Counter
 from src.config import settings
 from src.utils.logging import get_agent_logger

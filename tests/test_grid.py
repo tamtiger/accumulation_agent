@@ -1,4 +1,3 @@
-import pytest
 from src.grid.engine import GridEngine
 
 def test_grid_spacing_by_volatility():

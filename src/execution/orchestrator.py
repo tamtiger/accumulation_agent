@@ -1,5 +1,4 @@
 import time
-import json
 import datetime
 import redis
 from typing import Dict, Any, List, Optional
@@ -83,7 +82,7 @@ class ABASOrchestrator:
             a_trend = float(features["A_trend"])
             a_range = float(features["A_range"])
             a_mean = float(features["A_mean"])
-            sigma_ann = float(features["sigma_ann"])
+            float(features["sigma_ann"])
 
             # 3. Fallback Market Regime Detection (Rule-based for Phase 1 prototype)
             # 0: Panic Dump, 1: Sideways, 2: Bull Trend, 3: Blowoff Top, 4: Bear Market

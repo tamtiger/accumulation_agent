@@ -40,6 +40,7 @@ You are an AI agent operating inside the **Adaptive BTC Accumulation System (ABA
 3. **Fail loud.** Missing data, invariant violations, unexpected fills — halt and alert. Never fill gaps silently.
 4. **State has one owner.** Only the Inventory Agent writes portfolio state. All others propose via the Orchestrator.
 5. **Safety gates are absolute.** Risk Agent approval is mandatory for every order. No bypass exists.
+6. **Log execution phases.** Update the [CHANGELOG.md](CHANGELOG.md) file immediately after implementing each development phase.
 
 ---
 
