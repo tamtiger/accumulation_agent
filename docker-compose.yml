@@ -9,7 +9,7 @@ services:
       - POSTGRES_PASSWORD=postgrespassword
       - POSTGRES_DB=abas_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     restart: always

@@ -29,6 +29,7 @@ class RiskOverlay:
         self.hot_exchange_cap = settings.hot_exchange_cap
         self.min_profit_threshold = settings.min_profit_threshold
         self.system_halted = False
+        self.buys_paused = False
 
     def check_invariants(
         self,
@@ -43,6 +44,11 @@ class RiskOverlay:
         """
         if self.system_halted:
             raise InvariantViolationError("System is in a HALT state. No orders can be checked or submitted.")
+
+        if self.buys_paused:
+            for order in proposed_orders:
+                if order.side == "buy":
+                    raise InvariantViolationError("Buys are paused due to reserve floor breach.")
 
         core_btc = current_state.get("core_btc_qty", 0.0)
         trading_btc = current_state.get("trading_btc_qty", 0.0)
@@ -152,10 +158,22 @@ class RiskOverlay:
         if drawdown_7d > 0.25:
             self.trigger_halt("Drawdown > 25% in 7 days")
 
-        # 2. Reserve floor check (Trigger hard halt as per AGENTS.md Rule 2.6/2)
-        reserve_ratio = current_reserve_usdt / total_portfolio_usdt
+        # 2. Reserve floor check (No hard halt as per AGENTS_SAFETY.md: Pause buys only)
+        reserve_ratio = current_reserve_usdt / total_portfolio_usdt if total_portfolio_usdt > 0.0 else 0.0
         if reserve_ratio < self.reserve_floor:
-            self.trigger_halt(f"USDT Reserve ratio ({reserve_ratio*100:.1f}%) fell below floor ({self.reserve_floor*100:.1f}%).")
+            if not self.buys_paused:
+                self.buys_paused = True
+                logger.warning(
+                    f"Reserve ratio ({reserve_ratio*100:.1f}%) fell below floor ({self.reserve_floor*100:.1f}%). Buys are paused.",
+                    action="reserve_floor_pause"
+                )
+        else:
+            if self.buys_paused:
+                self.buys_paused = False
+                logger.info(
+                    f"Reserve ratio ({reserve_ratio*100:.1f}%) restored above floor ({self.reserve_floor*100:.1f}%). Buys are resumed.",
+                    action="reserve_floor_resume"
+                )
 
         # 3. Exchange API error rate
         if api_error_rate_5m > 0.05:

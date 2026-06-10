@@ -69,6 +69,8 @@ class ABASOrchestrator:
                 logger.warning("Tick skipped because validator flagged data as an outlier.")
                 return
 
+            tick_time = datetime.datetime.fromtimestamp(tick["timestamp"] / 1000.0, datetime.timezone.utc)
+
             self.save_raw_ohlcv_to_db(tick)
 
             # 2. Feature Engineering & Anchor Calculations
@@ -111,7 +113,7 @@ class ABASOrchestrator:
             self.ledger.trading_btc_qty = float(balances["free"]["BTC"])
 
             # Check Custody Promotion sweep signal
-            excess = self.custody_sweeper.check_promotion_trigger()
+            excess = self.custody_sweeper.check_promotion_trigger(tick_time)
             if excess and excess > 0:
                 logger.critical(f"Sweeping excess {excess:.6f} BTC from trading to core cold storage.")
                 self.ledger.core_btc_qty += excess
@@ -147,6 +149,17 @@ class ABASOrchestrator:
                 total_portfolio_value_usdt=self.get_total_portfolio_value_usdt(price),
                 regime=regime
             )
+            # Cap buy size to the remaining daily deployment cap to prevent invariant violation halts
+            portfolio_val = self.get_total_portfolio_value_usdt(price)
+            max_daily = portfolio_val * settings.daily_deployment_cap
+            daily_deployed = self.get_daily_deployed_usdt(tick_time)
+            remaining_daily_cap = max(0.0, max_daily - daily_deployed)
+            
+            # Cap buy size to the hot exchange cap to prevent INV-7 halts (using a small safety margin for float precision)
+            max_buy_val_for_hot_exchange = max(0.0, ((settings.hot_exchange_cap - 1e-5) * portfolio_val) - (self.ledger.trading_btc_qty * price))
+            
+            buy_val_usdt = min(buy_val_usdt, remaining_daily_cap, max_buy_val_for_hot_exchange)
+
             if buy_val_usdt >= 10.0:  # Minimum 10 USDT Binance order size
                 buy_qty = buy_val_usdt / price
                 proposed_orders.append(ProposedOrder(side="buy", qty=buy_qty, price=price))
@@ -178,7 +191,7 @@ class ABASOrchestrator:
                 proposed_orders.append(ProposedOrder(side="sell", qty=sell_qty_btc, price=price))
 
             # 6. Risk Overlay & Invariant Audits
-            daily_deployed = self.get_daily_deployed_usdt()
+            daily_deployed = self.get_daily_deployed_usdt(tick_time)
             self.risk_overlay.check_invariants(
                 proposed_orders=proposed_orders,
                 current_state=self.ledger.get_state_snapshot(),
@@ -225,21 +238,20 @@ class ABASOrchestrator:
                     self.risk_overlay.trigger_halt(f"Executed price slippage {slippage*100:.2f}% exceeds 2% cap.")
 
                 # Update FIFO ledger
-                time_now = datetime.datetime.now(datetime.timezone.utc)
                 exec_qty = exec_report["amount"]
 
                 if order.side == "buy":
                     self.ledger.add_buy_lot(
                         qty=exec_qty,
                         price=exec_price,
-                        timestamp=time_now,
+                        timestamp=tick_time,
                         regime_tag=str(regime)
                     )
                 elif order.side == "sell":
                     self.ledger.consume_sell_lots(
                         qty_to_sell=exec_qty,
                         sell_price=exec_price,
-                        timestamp=time_now,
+                        timestamp=tick_time,
                         order_id=exec_report["id"]
                     )
                     # Reset anchored local low to start a new cycle
@@ -247,10 +259,9 @@ class ABASOrchestrator:
                     logger.info("Sell executed. Resetting anchored local low for next cycle.")
 
             # 8. Portfolio Tracking Snapshots Persistence
-            time_now = datetime.datetime.now(datetime.timezone.utc)
             total_val = self.get_total_portfolio_value_usdt(price)
             InventoryRepository.save_portfolio_state(
-                time_val=time_now,
+                time_val=tick_time,
                 core_btc=self.ledger.core_btc_qty,
                 trading_btc=self.ledger.trading_btc_qty,
                 reserve_usdt=self.ledger.reserve_usdt,
@@ -273,7 +284,6 @@ class ABASOrchestrator:
 
         except InvariantViolationError as e:
             logger.error(f"Order rejected by Risk Overlay: {e}", action="invariant_violation")
-            self.risk_overlay.system_halted = True
             invariant_violation_counter.inc()
             self.notifier.send_alert(f"Invariant Violation: {e}")
         except SystemHaltError as e:
@@ -351,17 +361,18 @@ class ABASOrchestrator:
         finally:
             release_connection(conn)
 
-    def get_daily_deployed_usdt(self) -> float:
+    def get_daily_deployed_usdt(self, current_time: datetime.datetime) -> float:
         conn = get_connection()
         try:
             with conn.cursor() as cur:
-                # Sum the value of all buy trade history in the last 24h
+                # Sum the value of all buy trade history in the last 24h relative to current_time
                 cur.execute(
                     """
                     SELECT COALESCE(SUM(qty * price), 0.0)
                     FROM trade_history
-                    WHERE side = 'buy' AND time >= NOW() - INTERVAL '24 hours'
-                    """
+                    WHERE side = 'buy' AND time >= %s - INTERVAL '24 hours' AND time <= %s
+                    """,
+                    (current_time, current_time)
                 )
                 return float(cur.fetchone()[0])
         except Exception as e:

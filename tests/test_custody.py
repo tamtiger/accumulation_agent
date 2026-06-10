@@ -17,7 +17,8 @@ def mock_db():
 def test_sweeper_no_data(mock_db):
     mock_db.fetchall.return_value = []
     sweeper = CustodySweeper(trading_target=0.15, promotion_threshold_multiplier=1.3)
-    assert sweeper.check_promotion_trigger() is None
+    now = datetime.datetime.now(datetime.timezone.utc)
+    assert sweeper.check_promotion_trigger(now) is None
 
 def test_sweeper_insufficient_time_span(mock_db):
     # Only 3 days of records
@@ -27,7 +28,7 @@ def test_sweeper_insufficient_time_span(mock_db):
         (now, 0.5, 0.5)
     ]
     sweeper = CustodySweeper(trading_target=0.15, promotion_threshold_multiplier=1.3)
-    assert sweeper.check_promotion_trigger() is None
+    assert sweeper.check_promotion_trigger(now) is None
 
 def test_sweeper_interrupted_breach(mock_db):
     # Spans 7 days, but on day 4 trading_btc drops below threshold
@@ -45,7 +46,7 @@ def test_sweeper_interrupted_breach(mock_db):
     mock_db.fetchall.return_value = records
     
     sweeper = CustodySweeper(trading_target=0.15, promotion_threshold_multiplier=1.3)
-    assert sweeper.check_promotion_trigger() is None
+    assert sweeper.check_promotion_trigger(now) is None
 
 def test_sweeper_successful_trigger(mock_db):
     # Spans 7 days, all records exceed 0.195 BTC (total = 1.0 BTC, trading = 0.30 BTC)
@@ -59,7 +60,7 @@ def test_sweeper_successful_trigger(mock_db):
     mock_db.fetchall.return_value = records
     
     sweeper = CustodySweeper(trading_target=0.15, promotion_threshold_multiplier=1.3)
-    excess = sweeper.check_promotion_trigger()
+    excess = sweeper.check_promotion_trigger(now)
     
     # Expected excess = trading_qty - total * target = 0.30 - 1.0 * 0.15 = 0.15 BTC
     assert excess is not None

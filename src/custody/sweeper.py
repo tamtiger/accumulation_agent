@@ -1,3 +1,4 @@
+import datetime
 from typing import Optional
 from src.config import settings
 from src.utils.db import get_connection, release_connection
@@ -13,7 +14,7 @@ class CustodySweeper:
         self.trading_target = settings.trading_target
         self.promotion_threshold_multiplier = settings.promotion_threshold
 
-    def check_promotion_trigger(self) -> Optional[float]:
+    def check_promotion_trigger(self, current_time: datetime.datetime) -> Optional[float]:
         """
         Audits database history over the last 7 days.
         Returns the excess quantity of BTC to be promoted to Core cold storage, or None.
@@ -26,9 +27,10 @@ class CustodySweeper:
                     """
                     SELECT DISTINCT ON (date_trunc('day', time)) time, trading_btc_qty, core_btc_qty
                     FROM portfolio_states
-                    WHERE time >= NOW() - INTERVAL '7 days'
+                    WHERE time >= %s - INTERVAL '7 days' AND time <= %s
                     ORDER BY date_trunc('day', time) ASC, time DESC
-                    """
+                    """,
+                    (current_time, current_time)
                 )
                 rows = cur.fetchall()
                 if len(rows) < 7:

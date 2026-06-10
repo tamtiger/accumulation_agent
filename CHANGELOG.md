@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.2] - 2026-06-10
+
+### Fixed & Optimized
+- **Phase 2: Historical Backtesting & Validation**:
+  - Solved `DataGapError` infinite loop by updating `last_timestamp` before raising the exception in `DataValidator`.
+  - Resolved low-volatility outliers quarantine by adding minimum standard deviation floors (1% for price, 10% for volume) in z-score calculations.
+  - Initialized mock exchange's trading BTC balance to `0.0` in the backtest harness to avoid immediate INV-7 halts.
+  - Adapted daily deployment cap check, custody sweep, ledger updates, and portfolio snapshots to use tick/simulation time instead of database `NOW()`.
+  - Aligned risk overlay with safety specs so reserve ratio below floor pauses buys only (via a `buys_paused` flag) rather than triggering system halts.
+  - Improved orchestrator error handling to prevent soft `InvariantViolationError` rejections from marking the system as permanently halted.
+  - Successfully executed full backtesting simulations and parameter sweeps, generating the performance report at [backtest_report.md](artifacts/backtest_report.md).
+
 ## [2.1.1] - 2026-06-10
 
 ### Added

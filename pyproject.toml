@@ -24,6 +24,8 @@ dependencies = [
     "psycopg2-binary>=2.9.6",
     "redis>=4.5.0",
     "prometheus-client>=0.17.0",
+    "duckdb>=0.9.0",
+    "pyarrow>=12.0.0",
 ]
 
 [project.optional-dependencies]

@@ -30,9 +30,12 @@ class BacktestHarness:
         
         # Initialize orchestrator in mock mode
         self.orchestrator = ABASOrchestrator(use_mock=True)
+        self.orchestrator.ingester.interval = "1h"
+        self.orchestrator.ingester.validator.expected_interval_sec = 3600
         
         # Override mock exchange parameters to match backtest settings
         self.orchestrator.exchange.reserve_usdt = initial_usdt
+        self.orchestrator.exchange.trading_btc = 0.0
         self.orchestrator.exchange.maker_fee = maker_fee
         self.orchestrator.exchange.taker_fee = taker_fee
         self.orchestrator.exchange.slippage_mean = slippage
@@ -40,7 +43,7 @@ class BacktestHarness:
         # Set ledger sleeves
         self.orchestrator.ledger.reserve_usdt = initial_usdt
         self.orchestrator.ledger.core_btc_qty = initial_core_btc
-        self.orchestrator.ledger.trading_btc_qty = self.orchestrator.exchange.trading_btc
+        self.orchestrator.ledger.trading_btc_qty = 0.0
 
     def _reset_database(self) -> None:
         """

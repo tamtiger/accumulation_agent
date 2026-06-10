@@ -164,19 +164,19 @@ def test_risk_overlay_soft_invariants():
 def test_kill_switch_reserve_floor():
     overlay = RiskOverlay()
     
-    with pytest.raises(SystemHaltError) as excinfo:
-        overlay.audit_kill_switches(
-            drawdown_24h=0.0,
-            drawdown_7d=0.0,
-            current_reserve_usdt=10000.0,
-            total_portfolio_usdt=100000.0,
-            api_error_rate_5m=0.0,
-            stablecoin_peg_deviations={"USDT": 0.0},
-            bid_ask_spread_binance=0.0001,
-            median_30d_spread=0.0001,
-            execution_slippage=0.0
-        )
-    assert "Reserve ratio" in str(excinfo.value)
+    # Reserve below floor should NOT trigger a system halt (Pause buys only)
+    overlay.audit_kill_switches(
+        drawdown_24h=0.0,
+        drawdown_7d=0.0,
+        current_reserve_usdt=10000.0,
+        total_portfolio_usdt=100000.0,
+        api_error_rate_5m=0.0,
+        stablecoin_peg_deviations={"USDT": 0.0},
+        bid_ask_spread_binance=0.0001,
+        median_30d_spread=0.0001,
+        execution_slippage=0.0
+    )
+    assert overlay.buys_paused is True
 
 def test_risk_overlay_inv3_limit_order_different_price():
     overlay = RiskOverlay()

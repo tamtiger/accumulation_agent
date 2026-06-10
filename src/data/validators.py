@@ -37,14 +37,17 @@ class DataValidator:
         tick = MarketTick(**tick_data)
 
         # 2. Gap Detection
+        gap_detected = False
+        gap_msg = ""
         if self.last_timestamp is not None:
             delta_sec = (tick.timestamp - self.last_timestamp) / 1000.0
             if delta_sec > self.expected_interval_sec:
-                raise DataGapError(
-                    f"Data gap detected: timestamp delta ({delta_sec:.1f}s) > expected interval ({self.expected_interval_sec}s)"
-                )
+                gap_detected = True
+                gap_msg = f"Data gap detected: timestamp delta ({delta_sec:.1f}s) > expected interval ({self.expected_interval_sec}s)"
         
         self.last_timestamp = tick.timestamp
+        if gap_detected:
+            raise DataGapError(gap_msg)
 
         # 3. Store in sliding windows for outlier filtering
         self.prices.append(tick.close)
@@ -66,21 +69,23 @@ class DataValidator:
             v_mean, v_std = np.mean(hist_volumes), np.std(hist_volumes)
 
             # Price z-score check
-            if p_std > 0:
-                p_z = abs(tick.close - p_mean) / p_std
-                if p_z > 4.5:
-                    # Pop the newly added outlier to avoid contaminating future windows
-                    self.prices.pop()
-                    self.volumes.pop()
-                    raise OutlierError(f"Price outlier detected: value={tick.close}, z-score={p_z:.2f} (> 4.5)")
+            # Use a minimum standard deviation of 1.0% of the mean price to avoid bricking on low-volatility trends
+            effective_p_std = max(p_std, p_mean * 0.01)
+            p_z = abs(tick.close - p_mean) / effective_p_std
+            if p_z > 4.5:
+                # Pop the newly added outlier to avoid contaminating future windows
+                self.prices.pop()
+                self.volumes.pop()
+                raise OutlierError(f"Price outlier detected: value={tick.close}, z-score={p_z:.2f} (> 4.5)")
 
             # Volume z-score check
-            if v_std > 0:
-                v_z = abs(tick.volume - v_mean) / v_std
-                if v_z > 4.5:
-                    # Pop the newly added outlier
-                    self.prices.pop()
-                    self.volumes.pop()
-                    raise OutlierError(f"Volume outlier detected: value={tick.volume}, z-score={v_z:.2f} (> 4.5)")
+            # Use a minimum standard deviation of 10% of the mean volume to avoid bricking when volume variance is tiny
+            effective_v_std = max(v_std, v_mean * 0.1)
+            v_z = abs(tick.volume - v_mean) / effective_v_std
+            if v_z > 4.5:
+                # Pop the newly added outlier
+                self.prices.pop()
+                self.volumes.pop()
+                raise OutlierError(f"Volume outlier detected: value={tick.volume}, z-score={v_z:.2f} (> 4.5)")
 
         return tick
