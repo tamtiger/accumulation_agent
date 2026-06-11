@@ -13,6 +13,10 @@ class BinanceMock:
         self.trading_btc = trading_btc
         self.orders: Dict[str, Dict[str, Any]] = {}
         
+        # Perpetual mock tracking
+        self.perp_position_qty = 0.0
+        self.perp_position_entry = 0.0
+        
         # Fee model parameters
         self.maker_fee = 0.0002  # 0.02%
         self.taker_fee = 0.0010  # 0.10%
@@ -76,26 +80,53 @@ class BinanceMock:
         fee_rate = self.maker_fee if order_type.lower() == "limit" else self.taker_fee
         fee_cost = cost * fee_rate
         
-        # Update mock balances
-        if side == "buy":
-            total_cost = cost + fee_cost
-            if total_cost > self.reserve_usdt:
-                # Adjust size to max possible if not enough reserve (safety cap)
-                amount = (self.reserve_usdt * 0.99) / (executed_price * (1.0 + fee_rate))
-                cost = amount * executed_price
-                fee_cost = cost * fee_rate
-                total_cost = cost + fee_cost
-                
-            self.reserve_usdt -= total_cost
-            self.trading_btc += amount
+        # Check if perpetual market symbol
+        is_perp = ":" in symbol or symbol.endswith("USDT:USDT")
+        
+        if is_perp:
+            # Perpetual execution flow
+            if side == "sell":  # Open perp short
+                if self.perp_position_qty == 0.0:
+                    self.perp_position_entry = executed_price
+                else:
+                    self.perp_position_entry = (
+                        (self.perp_position_entry * self.perp_position_qty + executed_price * amount) /
+                        (self.perp_position_qty + amount)
+                    )
+                self.perp_position_qty += amount
+                self.reserve_usdt -= fee_cost
+            else:  # Close/Cover perp short
+                if self.perp_position_qty > 0.0:
+                    closed_qty = min(amount, self.perp_position_qty)
+                    # short pnl = qty * (entry_price - execution_price)
+                    pnl = closed_qty * (self.perp_position_entry - executed_price)
+                    self.reserve_usdt += (pnl - fee_cost)
+                    self.perp_position_qty -= closed_qty
+                    if self.perp_position_qty == 0.0:
+                        self.perp_position_entry = 0.0
+                else:
+                    self.reserve_usdt -= fee_cost
         else:
-            if amount > self.trading_btc:
-                amount = self.trading_btc
-                cost = amount * executed_price
-                fee_cost = cost * fee_rate
-
-            self.reserve_usdt += (cost - fee_cost)
-            self.trading_btc -= amount
+            # Spot execution flow
+            if side == "buy":
+                total_cost = cost + fee_cost
+                if total_cost > self.reserve_usdt:
+                    # Adjust size to max possible if not enough reserve (safety cap)
+                    amount = (self.reserve_usdt * 0.99) / (executed_price * (1.0 + fee_rate))
+                    cost = amount * executed_price
+                    fee_cost = cost * fee_rate
+                    total_cost = cost + fee_cost
+                    
+                self.reserve_usdt -= total_cost
+                self.trading_btc += amount
+            else:
+                if amount > self.trading_btc:
+                    amount = self.trading_btc
+                    cost = amount * executed_price
+                    fee_cost = cost * fee_rate
+    
+                self.reserve_usdt += (cost - fee_cost)
+                self.trading_btc -= amount
 
         order = {
             "id": order_id,

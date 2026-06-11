@@ -10,7 +10,7 @@ This file tracks the implementation progress of the **Adaptive BTC Accumulation 
 *   [x] **Phase 4: RL Optimization** (100% Completed)
 *   [x] **Phase 5: Paper Trading** (100% Completed)
 *   [x] **Phase 6: Small Capital Deployment** (100% Completed)
-*   [ ] **Phase 7: Delta-Neutral Sleeve (Optional)** (0% Completed)
+*   [x] **Phase 7: Delta-Neutral Sleeve (Optional)** (100% Completed)
 
 ---
 
@@ -145,8 +145,8 @@ This file tracks the implementation progress of the **Adaptive BTC Accumulation 
     - [x] *Testing:* Confirm zero discrepancies on daily audit reports.
 
 ### Phase 7 — Delta-Neutral Sleeve (Optional)
-- [ ] **Delta-Neutral Engine (`src/execution/`)**
-    - [ ] Build the funding-harvesting module (opening spot-long vs. perp-short).
-    - [ ] Code risk managers monitoring basis risk and perp liquidation boundaries.
-    - [ ] Implement isolated ledger tracking for delta-neutral trades.
-    - [ ] *Testing:* Unit test basis calculation and liquidation buffers.
+- [x] **Delta-Neutral Engine (`src/execution/`)**
+    - [x] Build the funding-harvesting module (opening spot-long vs. perp-short).
+    - [x] Code risk managers monitoring basis risk and perp liquidation boundaries.
+    - [x] Implement isolated ledger tracking for delta-neutral trades.
+    - [x] *Testing:* Unit test basis calculation and liquidation buffers.

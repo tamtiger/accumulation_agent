@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.7] - 2026-06-11
+
+### Added
+- **Phase 7: Delta-Neutral Sleeve (Optional)**:
+  - Implemented `DeltaNeutralManager` in `src/execution/delta_neutral.py` to harvest perpetual funding rates.
+  - Implemented isolated ledger logging, basis spread divergence checks, and perp liquidation risk managers.
+  - Integrated the Delta-Neutral sleeve in `ABASOrchestrator` (`src/execution/orchestrator.py`) with configuration controls.
+  - Added spot balance isolation in orchestrator syncing to prevent Delta-Neutral spot positions from interfering with the core grid sleeve.
+  - Enhanced `BinanceMock` to support simulated perpetual orders, fees, and short position PnL.
+  - Added unit test suite in `tests/test_delta_neutral.py` validating engine logic and orchestrator integration.
+
 ## [2.1.6] - 2026-06-11
 
 ### Added

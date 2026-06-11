@@ -18,6 +18,7 @@ from src.portfolio.tracker import PortfolioTracker
 from src.custody.sweeper import CustodySweeper
 from src.regime.classifier import RegimeClassifier
 from src.monitoring.exporter import loop_latency, order_slippage, portfolio_balance, api_error_counter, invariant_violation_counter, TelegramNotifier
+from src.execution.delta_neutral import DeltaNeutralManager
 
 logger = get_agent_logger("orchestrator")
 
@@ -67,6 +68,7 @@ class ABASOrchestrator:
                 "enableRateLimit": settings.binance_enable_rate_limit
             })
             
+        self.delta_neutral_manager = DeltaNeutralManager(self.exchange, max_allocation_pct=0.20)
         self.last_heartbeat_time = 0.0
 
     def run_tick(self) -> None:
@@ -119,7 +121,53 @@ class ABASOrchestrator:
                 api_error_counter.labels(exchange="binance").inc()
                 raise e
             self.ledger.reserve_usdt = float(balances["free"]["USDT"])
-            self.ledger.trading_btc_qty = float(balances["free"]["BTC"])
+            
+            # Subtract Delta-Neutral spot BTC to avoid grid interference
+            dn_spot_qty = self.delta_neutral_manager.spot_qty
+            self.ledger.trading_btc_qty = max(0.0, float(balances["free"]["BTC"]) - dn_spot_qty)
+
+            # Delta-Neutral Sleeve
+            total_val = self.get_total_portfolio_value_usdt(price)
+            if getattr(settings, "delta_neutral_enabled", False):
+                perp_price = price
+                if not self.use_mock:
+                    try:
+                        ticker = self.exchange.fetch_ticker("BTC/USDT:USDT")
+                        perp_price = float(ticker.get("last", price))
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch perp ticker from exchange: {e}. Using spot price.")
+                
+                funding_rate = float(features.get("funding_rate", 0.0))
+                dn_orders = self.delta_neutral_manager.execute_tick(
+                    spot_price=price,
+                    perp_price=perp_price,
+                    funding_rate=funding_rate,
+                    total_portfolio_val_usdt=total_val
+                )
+                
+                for dn_order in dn_orders:
+                    symbol = "BTC/USDT:USDT" if dn_order["market"] == "perp" else "BTC/USDT"
+                    logger.info(f"Executing approved Delta-Neutral order: {dn_order['side'].upper()} {dn_order['qty']:.6f} {symbol} @ {dn_order['price']:.2f}")
+                    try:
+                        self.exchange.create_order(
+                            symbol=symbol,
+                            type="limit",
+                            side=dn_order["side"],
+                            amount=dn_order["qty"],
+                            price=dn_order["price"]
+                        )
+                    except Exception as e:
+                        api_error_counter.labels(exchange="binance").inc()
+                        logger.error(f"Failed to execute Delta-Neutral order: {e}")
+                
+                if dn_orders:
+                    try:
+                        balances = self.exchange.fetch_balance()
+                        self.ledger.reserve_usdt = float(balances["free"]["USDT"])
+                        dn_spot_qty = self.delta_neutral_manager.spot_qty
+                        self.ledger.trading_btc_qty = max(0.0, float(balances["free"]["BTC"]) - dn_spot_qty)
+                    except Exception as e:
+                        logger.warning(f"Failed to re-sync balances after Delta-Neutral orders: {e}")
 
             # Check Custody Promotion sweep signal
             excess = self.custody_sweeper.check_promotion_trigger(tick_time)
@@ -316,7 +364,8 @@ class ABASOrchestrator:
                 logger.warning(f"Failed to publish Redis heartbeat: {e}")
 
     def get_total_portfolio_value_usdt(self, btc_price: float) -> float:
-        return self.ledger.reserve_usdt + (self.ledger.core_btc_qty + self.ledger.trading_btc_qty) * btc_price
+        dn_spot_qty = getattr(self.delta_neutral_manager, "spot_qty", 0.0)
+        return self.ledger.reserve_usdt + (self.ledger.core_btc_qty + self.ledger.trading_btc_qty + dn_spot_qty) * btc_price
 
     def save_raw_ohlcv_to_db(self, tick: Dict[str, Any]) -> None:
         conn = get_connection()
