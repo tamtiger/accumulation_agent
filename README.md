@@ -34,6 +34,7 @@ ABAS thực hiện mô hình khai thác biến động được thiết kế ri�
 2.  **Bán một phần khi hồi phục (Sell Partial Rebounds):** Bán từng phần nhỏ của kho giao dịch khi giá hồi phục, đảm bảo mọi lệnh bán đều được chốt chặn bởi ngưỡng lợi nhuận tối thiểu so với giá vốn cụ thể của lô đó (áp dụng FIFO theo dõi lô).
 3.  **Tái mua ở mức chiết khấu sâu hơn (Rebuy Deeper):** Sử dụng lượng stablecoin dự trữ thu hoạch được để mua lại ở mức giá thấp hơn.
 4.  **Chuyển vào giỏ Lõi (Promote to Core):** Tự động chuyển lượng BTC giao dịch dư thừa vào giỏ Lõi (rút về ví lạnh) khi số dư giao dịch vượt mục tiêu duy trì.
+5.  **Khai thác Funding Rate (Delta-Neutral Sleeve):** Thu hoạch lợi nhuận từ funding rate dương (>0.05%/8h) bằng cách mua spot và bán khống perp đối ứng với tỷ lệ phân bổ tối đa 20% tổng giá trị danh mục.
 
 ### Mốc neo tham chiếu (Reference Anchors)
 Mọi ngưỡng quyết định giao dịch được tính toán động dựa trên các mốc neo:
@@ -175,13 +176,13 @@ src/
 
 ## 9. Lộ trình Phát triển
 
-*   **Pha 1: Prototype Dựa trên Quy tắc (Rule-Based Core)** — Xây dựng công cụ nạp dữ liệu, sổ cái FIFO, tính toán lưới thích ứng và lớp kiểm soát Invariant. (Đang thực hiện)
-*   **Pha 2: Backtest Lịch sử** — Đánh giá hiệu suất hệ thống qua các thời kỳ sập mạnh và tăng trưởng của BTC.
-*   **Pha 3: Tích hợp AI Phân loại Trạng thái (Regime Overlay)** — Sử dụng HMM và K-Means để tối ưu hóa hệ số định cỡ lệnh.
-*   **Pha 4: Tối ưu hóa bằng Học Tăng Cường (RL)** — Huấn luyện tác tử RL tối ưu hóa vùng đệm lưới trên môi trường giả lập.
-*   **Pha 5: Giao dịch Mô phỏng (Paper Trading)** — Vận hành thực tế không dùng tiền thật để đo lường độ trễ và độ trượt giá.
-*   **Pha 6: Triển khai Vốn nhỏ** — Chạy thử nghiệm thực tế với $\le 1\%$ lượng vốn định danh để đối soát độ chính xác của sổ cái DB và ví sàn.
-*   **Pha 7: Delta-Neutral Sleeve (Tùy chọn)** — Xây dựng giỏ hedging thu hoạch funding rate phòng vệ rủi ro.
+*   **Pha 1: Prototype Dựa trên Quy tắc (Rule-Based Core)** — Xây dựng công cụ nạp dữ liệu, sổ cái FIFO, tính toán lưới thích ứng và lớp kiểm soát Invariant. (Đã hoàn thành)
+*   **Pha 2: Backtest Lịch sử** — Đánh giá hiệu suất hệ thống qua các thời kỳ sập mạnh và tăng trưởng của BTC. (Đã hoàn thành)
+*   **Pha 3: Tích hợp AI Phân loại Trạng thái (Regime Overlay)** — Sử dụng HMM và K-Means để tối ưu hóa hệ số định cỡ lệnh. (Đã hoàn thành)
+*   **Pha 4: Tối ưu hóa bằng Học Tăng Cường (RL)** — Huấn luyện tác tử RL tối ưu hóa vùng đệm lưới trên môi trường giả lập. (Đã hoàn thành)
+*   **Pha 5: Giao dịch Mô phỏng (Paper Trading)** — Vận hành thực tế không dùng tiền thật để đo lường độ trễ và độ trượt giá. (Đã hoàn thành)
+*   **Pha 6: Triển khai Vốn nhỏ** — Chạy thử nghiệm thực tế với $\le 1\%$ lượng vốn định danh để đối soát độ chính xác của sổ cái DB và ví sàn. (Đã hoàn thành)
+*   **Pha 7: Delta-Neutral Sleeve (Tùy chọn)** — Xây dựng giỏ hedging thu hoạch funding rate phòng vệ rủi ro. (Đã hoàn thành)
 
 ---
 
