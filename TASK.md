@@ -84,57 +84,57 @@ This file tracks the implementation progress of the **Adaptive BTC Accumulation 
     - [x] *Testing:* Verify tax logic on long-term capital gains vs short-term rates.
 
 ### Phase 2 — Historical Backtesting & Validation
-- [ ] **Cycle-by-Cycle Historical Simulation**
-    - [ ] Run simulations for:
-        - [ ] 2018–2019 (Bear + early recovery)
-        - [ ] 2020–2021 (Bull market)
-        - [ ] 2022 (Survival / Drawdown)
-        - [ ] 2023 (Transition / Recovery)
-        - [ ] 2024 (ETF flows)
-- [ ] **Sensitivity Analyses**
-    - [ ] Run parameter sweeps across fee levels ($0.05\% / 0.10\% / 0.15\%$).
-    - [ ] Run parameter sweeps across slippage rates ($0.02\% / 0.05\% / 0.10\%$).
-    - [ ] Run parameter sweeps across tax rates ($0\% / 20\% / 35\%$).
-- [ ] **Benchmark Reporting**
-    - [ ] Generate reports showing performance vs. HODL, weekly DCA, and fixed 5% grid.
-    - [ ] Calculate BTC-native metrics: `Δ_BTC vs HODL`, BTC CAGR, BTC velocity, Max Drawdown.
-    - [ ] *Testing:* Verify backtest determinism (running identical backtest twice yields identical results).
+- [x] **Cycle-by-Cycle Historical Simulation**
+    - [x] Run simulations for:
+        - [x] 2018–2019 (Bear + early recovery)
+        - [x] 2020–2021 (Bull market)
+        - [x] 2022 (Survival / Drawdown)
+        - [x] 2023 (Transition / Recovery)
+        - [x] 2024 (ETF flows)
+- [x] **Sensitivity Analyses**
+    - [x] Run parameter sweeps across fee levels ($0.05\% / 0.10\% / 0.15\%$).
+    - [x] Run parameter sweeps across slippage rates ($0.02\% / 0.05\% / 0.10\%$).
+    - [x] Run parameter sweeps across tax rates ($0\% / 20\% / 35\%$).
+- [x] **Benchmark Reporting**
+    - [x] Generate reports showing performance vs. HODL, weekly DCA, and fixed 5% grid.
+    - [x] Calculate BTC-native metrics: `Δ_BTC vs HODL`, BTC CAGR, BTC velocity, Max Drawdown.
+    - [x] *Testing:* Verify backtest determinism (running identical backtest twice yields identical results).
 
 ### Phase 3 — AI Overlay (Regime Detection)
-- [ ] **Advanced Features & Models (`src/regime/`)**
-    - [ ] Implement Hidden Markov Model (HMM) classifier.
-    - [ ] Implement K-means clustering classifier.
-    - [ ] Implement Bayesian Online Change-Point Detection (BOCPD).
-- [ ] **Regime-Conditional Execution**
-    - [ ] Connect regime output and confidence scores to dynamic buy/sell sizing multipliers.
-    - [ ] Implement hysteresis filtering (wait 3 consecutive 4h candles or confidence score $> 0.95$).
-    - [ ] *Testing:* Walk-forward cross validation checks with Combinatorial Purged Cross Validation (CPCV).
+- [x] **Advanced Features & Models (`src/regime/`)**
+    - [x] Implement Hidden Markov Model (HMM) classifier.
+    - [x] Implement K-means clustering classifier.
+    - [x] Implement Bayesian Online Change-Point Detection (BOCPD).
+- [x] **Regime-Conditional Execution**
+    - [x] Connect regime output and confidence scores to dynamic buy/sell sizing multipliers.
+    - [x] Implement hysteresis filtering (wait 3 consecutive 4h candles or confidence score $> 0.95$).
+    - [x] *Testing:* Walk-forward cross validation checks with Combinatorial Purged Cross Validation (CPCV).
 
 ### Phase 4 — Reinforcement Learning Optimization
-- [ ] **Market Simulator (`src/simulator/`)**
-    - [ ] Build synthetic market simulator (GBM with regime-switching volatility).
-    - [ ] Implement GAN / diffusion-based generator trained on historical features.
-    - [ ] Validate simulator using stylized-fact tests.
-- [ ] **RL Agent Training (`src/ai/`)**
-    - [ ] Build custom Gym environment exposing state vector and action space.
-    - [ ] Design the reward function incorporating `btc_growth`, drawdown penalty, overtrading penalty, and `hodl_underperformance_penalty`.
-    - [ ] Implement Offline RL (CQL/IQL) warm-start pipelines.
-    - [ ] Train RL agent using Stable-Baselines3/CleanRL.
-    - [ ] Evaluate Probability of Backtest Overfitting (PBO).
-    - [ ] *Testing:* Assert target $PBO < 0.5$ on final model checkpoint.
+- [x] **Market Simulator (`src/simulator/`)**
+    - [x] Build synthetic market simulator (GBM with regime-switching volatility).
+    - [x] Implement GAN / diffusion-based generator trained on historical features.
+    - [x] Validate simulator using stylized-fact tests.
+- [x] **RL Agent Training (`src/ai/`)**
+    - [x] Build custom Gym environment exposing state vector and action space.
+    - [x] Design the reward function incorporating `btc_growth`, drawdown penalty, overtrading penalty, and `hodl_underperformance_penalty`.
+    - [x] Implement Offline RL (CQL/IQL) warm-start pipelines.
+    - [x] Train RL agent using Stable-Baselines3/CleanRL.
+    - [x] Evaluate Probability of Backtest Overfitting (PBO).
+    - [x] *Testing:* Assert target $PBO < 0.5$ on final model checkpoint.
 
 ### Phase 5 — Paper Trading
-- [ ] **Live Execution Setup (`src/execution/`)**
-    - [ ] Implement real CCXT Binance API client integration (Trade-only API key verification).
-    - [ ] Set up live WebSocket handlers for tickers, orderbooks, and user data streams.
-- [ ] **Paper Trading Pipeline**
-    - [ ] Deploy system to run with live data and simulated order execution.
-    - [ ] Build Prometheus & Grafana dashboard to track performance in real-time.
-    - [ ] Implement Telegram warning exporter.
-- [ ] **Reconciliation & Validation**
-    - [ ] Monitor and log execution latency, slippage, and fill quality.
-    - [ ] *Testing:* Conduct chaos tests (disconnect internet, mock rate limits, inject wrong WS payloads) and assert system recovers or halts correctly.
-    - [ ] Verify that zero invariant violations and zero kill-switch misfires occur over a 3-month trial.
+- [x] **Live Execution Setup (`src/execution/`)**
+    - [x] Implement real CCXT Binance API client integration (Trade-only API key verification).
+    - [x] Set up live WebSocket handlers for tickers, orderbooks, and user data streams.
+- [x] **Paper Trading Pipeline**
+    - [x] Deploy system to run with live data and simulated order execution.
+    - [x] Build Prometheus & Grafana dashboard to track performance in real-time.
+    - [x] Implement Telegram warning exporter.
+- [x] **Reconciliation & Validation**
+    - [x] Monitor and log execution latency, slippage, and fill quality.
+    - [x] *Testing:* Conduct chaos tests (disconnect internet, mock rate limits, inject wrong WS payloads) and assert system recovers or halts correctly.
+    - [x] Verify that zero invariant violations and zero kill-switch misfires occur over a 3-month trial.
 
 ### Phase 6 — Small Capital Deployment
 - [ ] **Small-Scale Live Run**
