@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.6] - 2026-06-11
+
+### Added
+- **Phase 6: Small Capital Deployment**:
+  - Aligned CCXT `create_order` parameters in `ABASOrchestrator` to match the official CCXT signature (`type="limit"`).
+  - Back-ported standard `type` parameter mapping to `BinanceMock` and `BinancePaper` execution wrappers.
+  - Implemented `LedgerAuditor` in `src/portfolio/reconcile_audit.py` to reconcile live exchange balances against database states and write daily audit reports.
+  - Added automated Telegram discrepancy alerts when database values diverge from actual exchange balances.
+
 ## [2.1.5] - 2026-06-11
 
 ### Added

@@ -93,11 +93,12 @@ class BinancePaper:
     def create_order(
         self,
         symbol: str,
-        type_val: str,
-        side: str,
-        amount: float,
+        type_val: Optional[str] = None,
+        side: str = "buy",
+        amount: float = 0.0,
         price: Optional[float] = None,
-        params: Optional[Dict[str, Any]] = None
+        params: Optional[Dict[str, Any]] = None,
+        type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Simulates order execution against real-time WebSocket orderbook depth.
@@ -105,6 +106,7 @@ class BinancePaper:
         if not self.is_initialized:
             self.initialize_balances()
             
+        order_type = type_val or type or "limit"
         order_id = f"paper-order-{uuid.uuid4()}"
         
         # Get real-time execution price from orderbook
@@ -124,7 +126,7 @@ class BinancePaper:
         slippage = abs((executed_price - limit_price) / limit_price) if limit_price > 0 else 0.0
         
         cost = amount * executed_price
-        fee_rate = self.maker_fee if type_val.lower() == "limit" else self.taker_fee
+        fee_rate = self.maker_fee if order_type.lower() == "limit" else self.taker_fee
         fee_cost = cost * fee_rate
         
         # Update paper balances
@@ -155,7 +157,7 @@ class BinancePaper:
             "lastTradeTimestamp": int(time.time() * 1000),
             "status": "closed",
             "symbol": symbol,
-            "type": type_val,
+            "type": order_type,
             "side": side,
             "price": limit_price,
             "amount": amount,

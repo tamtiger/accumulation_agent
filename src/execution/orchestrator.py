@@ -230,7 +230,7 @@ class ABASOrchestrator:
                 try:
                     exec_report = self.exchange.create_order(
                         symbol="BTC/USDT",
-                        type_val="limit",
+                        type="limit",
                         side=order.side,
                         amount=order.qty,
                         price=order.price

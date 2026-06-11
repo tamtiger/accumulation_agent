@@ -46,15 +46,17 @@ class BinanceMock:
     def create_order(
         self,
         symbol: str,
-        type_val: str,
-        side: str,
-        amount: float,
+        type_val: Optional[str] = None,
+        side: str = "buy",
+        amount: float = 0.0,
         price: Optional[float] = None,
-        params: Optional[Dict[str, Any]] = None
+        params: Optional[Dict[str, Any]] = None,
+        type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Mimics CCXT create_order output schema, updating internal mock balances and modeling slippage & fees.
         """
+        order_type = type_val or type or "limit"
         order_id = f"mock-order-{uuid.uuid4()}"
         
         # Calculate execution price with simulated slippage
@@ -71,7 +73,7 @@ class BinanceMock:
         cost = amount * executed_price
         
         # Determine fee based on order type (limit -> maker, market -> taker)
-        fee_rate = self.maker_fee if type_val.lower() == "limit" else self.taker_fee
+        fee_rate = self.maker_fee if order_type.lower() == "limit" else self.taker_fee
         fee_cost = cost * fee_rate
         
         # Update mock balances
@@ -103,7 +105,7 @@ class BinanceMock:
             "lastTradeTimestamp": int(time.time() * 1000),
             "status": "closed",
             "symbol": symbol,
-            "type": type_val,
+            "type": order_type,
             "side": side,
             "price": limit_price,
             "amount": amount,
