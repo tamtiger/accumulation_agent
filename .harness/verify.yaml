@@ -2,8 +2,8 @@ runtime: python
 commands:
   install: null
   build: null
-  test: .venv\Scripts\pytest
-  lint: .venv\Scripts\ruff check .
+  test: uv run pytest
+  lint: uv run ruff check .
   typecheck: null
 timeouts:
   build: 60

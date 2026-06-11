@@ -14,6 +14,7 @@ from src.risk.overlay import RiskOverlay, ProposedOrder, InvariantViolationError
 from src.execution.ccxt_mock import BinanceMock
 from src.portfolio.tracker import PortfolioTracker
 from src.custody.sweeper import CustodySweeper
+from src.regime.classifier import RegimeClassifier
 from src.monitoring.exporter import loop_latency, order_slippage, portfolio_balance, api_error_counter, invariant_violation_counter, TelegramNotifier
 
 logger = get_agent_logger("orchestrator")
@@ -27,6 +28,7 @@ class ABASOrchestrator:
         self.redis_client = redis_client or redis.from_url(settings.redis_url)
         self.ingester = DataIngester(redis_client=self.redis_client)
         self.features_engine = FeatureEngine()
+        self.regime_classifier = RegimeClassifier()
         self.ledger = FIFOLedger()
         self.grid_engine = GridEngine()
         self.risk_overlay = RiskOverlay()
@@ -86,19 +88,10 @@ class ABASOrchestrator:
             a_mean = float(features["A_mean"])
             float(features["sigma_ann"])
 
-            # 3. Fallback Market Regime Detection (Rule-based for Phase 1 prototype)
-            # 0: Panic Dump, 1: Sideways, 2: Bull Trend, 3: Blowoff Top, 4: Bear Market
-            regime = 1  # Sideways default
-            drawdown = (a_range - price) / a_range
-            
-            if drawdown > 0.15:
-                regime = 0  # Panic Dump
-            elif price > a_trend * 1.05:
-                regime = 2  # Bull Trend
-            elif price < a_trend * 0.90:
-                regime = 4  # Bear Market
-            elif price > a_range * 0.98:
-                regime = 3  # Blowoff Top
+            # 3. AI Overlay Unsupervised Regime Detection
+            regime_dict = self.regime_classifier.predict_tick(features)
+            regime = regime_dict["regime"]
+            confidence = regime_dict["confidence"]
 
             # 4. Inventory Management Loading & FIFO sync
             self.ledger.load_from_db()
@@ -267,7 +260,7 @@ class ABASOrchestrator:
                 reserve_usdt=self.ledger.reserve_usdt,
                 total_val=total_val,
                 regime=regime,
-                confidence=1.0
+                confidence=confidence
             )
 
             # Update Prometheus gauges

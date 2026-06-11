@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.3] - 2026-06-11
+
+### Added
+- **Phase 3: AI Overlay (Regime Detection)**:
+  - Implemented `GaussianHMM` in pure NumPy with Baum-Welch training and Viterbi sequence decoding.
+  - Implemented `NumPyKMeans` clustering for multi-feature classification.
+  - Implemented `BOCPD` (Bayesian Online Change-Point Detection) with Normal-Gamma prior.
+  - Developed `RegimeClassifier` supporting centroid-based post-hoc semantic mapping, confidence calculation, and 3-tick hysteresis filtering.
+  - Integrated regime detection with the orchestrator (`src/execution/orchestrator.py`) for dynamic sizing and spacing adjustments.
+  - Updated build commands and tests to run via `uv` toolchain.
+
 ## [2.1.2] - 2026-06-10
 
 ### Fixed & Optimized
