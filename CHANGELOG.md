@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.4] - 2026-06-11
+
+### Added
+- **Phase 4: Reinforcement Learning Optimization**:
+  - Created `GBMSimulator` and `MSARGenerator` in pure NumPy for generating synthetic returns with volatility clustering and fat tails.
+  - Implemented `StylizedFactsValidator` to check for kurtosis and autocorrelation of absolute returns.
+  - Implemented custom `ABASGymEnv` environment mapping trading states, executing spacing/deployment actions, and calculating rewards.
+  - Implemented `NumPyRLAgent` mapping states to actions using a Gaussian Policy Gradient (REINFORCE) network.
+  - Implemented `PBOEvaluator` calculating Probability of Backtest Overfitting.
+
 ## [2.1.3] - 2026-06-11
 
 ### Added
