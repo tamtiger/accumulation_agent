@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.8] - 2026-06-11
+
+### Added
+- **Core Constraints & Compounding**:
+  - Implemented **Accumulation Guard** capping the buy multiplier deep underwater to prevent blowing through reserves too early in a cycle.
+  - Implemented **180-day Gating Exception** in GridEngine to force sell lots held longer than 180 days even if underwater (for tax loss harvesting purposes).
+  - Implemented **30/70 PnL Split**: On profitable sells, 30% of the net profit is extracted to fiat/USDT reserve, and 70% is compounded into the core BTC stash.
+- **Resilience & Execution**:
+  - Implemented `BinanceMock` fallback logic in both the `ABASOrchestrator` main loop and the `reconcile_audit` script to gracefully permit local execution (Paper Trading without Binance API Keys).
+
+### Fixed
+- Fixed `RuntimeWarning: divide by zero encountered in log` in HMM regime predictor by clipping probabilities before log calculations.
+- Suppressed legacy DBAPI2 SQLAlchemy warnings emitted by `pandas`.
+- Fixed missing columns error (`column "funding_rate" does not exist`) by removing cross-table references from the primary `binance_ohlcv` query in `FeatureEngine`.
+- Fixed Orchestrator and Audit script execution by enforcing module mode execution (`-m src...`) and updating documentation across `README.md`.
+- Added missing main execution block and tracebacks to `src/portfolio/reconcile_audit.py` for manual daily auditing.
+
 ## [2.1.7] - 2026-06-11
 
 ### Added
