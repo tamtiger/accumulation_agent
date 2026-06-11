@@ -12,6 +12,8 @@ from src.inventory.models import InventoryRepository
 from src.grid.engine import GridEngine
 from src.risk.overlay import RiskOverlay, ProposedOrder, InvariantViolationError, SystemHaltError
 from src.execution.ccxt_mock import BinanceMock
+from src.execution.live_ws import BinanceWSClient
+from src.execution.paper import BinancePaper
 from src.portfolio.tracker import PortfolioTracker
 from src.custody.sweeper import CustodySweeper
 from src.regime.classifier import RegimeClassifier
@@ -23,8 +25,9 @@ class ABASOrchestrator:
     """
     Orchestrates the sequential tick pipeline of agents and handles execution flow.
     """
-    def __init__(self, use_mock: bool = True, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, use_mock: bool = True, redis_client: Optional[redis.Redis] = None, paper_mode: bool = False):
         self.use_mock = use_mock
+        self.paper_mode = paper_mode
         self.redis_client = redis_client or redis.from_url(settings.redis_url)
         self.ingester = DataIngester(redis_client=self.redis_client)
         self.features_engine = FeatureEngine()
@@ -43,6 +46,19 @@ class ABASOrchestrator:
             # Feed ledger balances directly from the mock exchange
             self.ledger.reserve_usdt = self.exchange.reserve_usdt
             self.ledger.trading_btc_qty = self.exchange.trading_btc
+        elif paper_mode:
+            import ccxt
+            import asyncio
+            self.ws_client = BinanceWSClient()
+            # Start background websocket task
+            asyncio.create_task(self.ws_client.start())
+            self.real_exchange = ccxt.binance({
+                "apiKey": settings.binance_api_key,
+                "secret": settings.binance_secret,
+                "enableRateLimit": settings.binance_enable_rate_limit
+            })
+            self.exchange = BinancePaper(self.real_exchange, self.ws_client)
+            self.exchange.initialize_balances()
         else:
             import ccxt
             self.exchange = ccxt.binance({

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.5] - 2026-06-11
+
+### Added
+- **Phase 5: Paper Trading**:
+  - Implemented real-time market data streaming via `BinanceWSClient` using `aiohttp` websockets.
+  - Implemented `BinancePaper` execution client which queries live balances, simulates fills and slippage versus orderbook depth, and enforces read-only safety checks.
+  - Enabled API key permissions auditing to automatically assert withdrawal features are disabled at startup.
+  - Integrated paper trading in the orchestrator pipeline.
+
 ## [2.1.4] - 2026-06-11
 
 ### Added
