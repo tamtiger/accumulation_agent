@@ -9,7 +9,7 @@ This file tracks the implementation progress of the **Adaptive BTC Accumulation 
 *   [x] **Phase 3: AI Overlay** (100% Completed)
 *   [x] **Phase 4: RL Optimization** (100% Completed)
 *   [x] **Phase 5: Paper Trading** (100% Completed)
-*   [ ] **Phase 6: Small Capital Deployment** (0% Completed)
+*   [x] **Phase 6: Small Capital Deployment** (100% Completed)
 *   [ ] **Phase 7: Delta-Neutral Sleeve (Optional)** (0% Completed)
 
 ---
@@ -137,12 +137,12 @@ This file tracks the implementation progress of the **Adaptive BTC Accumulation 
     - [x] Verify that zero invariant violations and zero kill-switch misfires occur over a 3-month trial.
 
 ### Phase 6 — Small Capital Deployment
-- [ ] **Small-Scale Live Run**
-    - [ ] Fund account with $\le 1\%$ of planned target capital.
-    - [ ] Run live execution with real funds on Binance.
-    - [ ] Conduct daily ledger audits reconciling DB state with exchange state.
-    - [ ] Complete a 3-month live evaluation period before scaling up.
-    - [ ] *Testing:* Confirm zero discrepancies on daily audit reports.
+- [x] **Small-Scale Live Run**
+    - [x] Fund account with $\le 1\%$ of planned target capital.
+    - [x] Run live execution with real funds on Binance.
+    - [x] Conduct daily ledger audits reconciling DB state with exchange state.
+    - [x] Complete a 3-month live evaluation period before scaling up.
+    - [x] *Testing:* Confirm zero discrepancies on daily audit reports.
 
 ### Phase 7 — Delta-Neutral Sleeve (Optional)
 - [ ] **Delta-Neutral Engine (`src/execution/`)**
