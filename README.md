@@ -147,30 +147,55 @@ src/
 
 ---
 
-## 8. Hướng dẫn Khởi đầu
+## 8. Hướng dẫn Khởi đầu & Sử dụng
 
+### 8.1 Cài đặt
 1.  **Clone dự án:**
     ```bash
     git clone https://github.com/tamtiger/accumulation_agent.git
     cd accumulation_agent
     ```
-2.  **Thiết lập môi trường:**
-    Cài đặt các gói phụ thuộc Python bằng `uv` hoặc `pip`:
+2.  **Thiết lập môi trường bằng `uv`:**
     ```bash
-    pip install -r requirements.txt
+    # Cài đặt môi trường ảo và dependencies
+    uv sync
     ```
-3.  **Cấu hình hệ thống:**
-    Cập nhật thông tin tài khoản sàn và các tham số vận hành trong file `config/production.json`.
-4.  **Khởi động cơ sở hạ tầng cơ sở:**
-    Khởi chạy Redis và PostgreSQL/TimescaleDB thông qua docker-compose:
+
+### 8.2 Cấu hình Hệ thống
+Hệ thống sử dụng file `config/production.json` làm cấu hình mặc định, kết hợp nạp biến môi trường từ file `.env`.
+Các tham số cấu hình chính:
+- `binance_api_key` & `binance_secret`: API key tài khoản sàn Binance.
+- `delta_neutral_enabled`: Bật/tắt giỏ delta-neutral (`true` / `false`).
+- `reserve_floor`: Tỷ lệ quỹ stablecoin dự trữ an toàn (mặc định `0.15`).
+
+### 8.3 Vận hành Hệ thống
+1.  **Khởi động dịch vụ phụ trợ (Database & Redis):**
     ```bash
     docker-compose up -d
     ```
-5.  **Khởi chạy hệ thống:**
-    Chạy trình Orchestrator chính:
+2.  **Chạy Orchestrator chính:**
     ```bash
-    python src/execution/orchestrator.py
+    # Chạy vòng lặp tích lũy chính
+    uv run python src/execution/orchestrator.py
     ```
+3.  **Chạy tiến trình đối soát số dư hàng ngày (Daily Audit):**
+    ```bash
+    uv run python src/portfolio/reconcile_audit.py
+    ```
+
+### 8.4 Kiểm thử & Giả lập
+- **Chạy toàn bộ bộ test:**
+  ```bash
+  uv run pytest
+  ```
+- **Chạy riêng test Delta-Neutral:**
+  ```bash
+  uv run pytest tests/test_delta_neutral.py
+  ```
+- **Chạy mô phỏng Backtest:**
+  ```bash
+  uv run pytest tests/test_backtest.py
+  ```
 
 ---
 
