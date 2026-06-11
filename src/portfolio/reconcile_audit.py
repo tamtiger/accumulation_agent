@@ -95,3 +95,31 @@ class LedgerAuditor:
             self.notifier.send_alert(err_msg)
             
         return report
+
+if __name__ == "__main__":
+    import traceback
+    import ccxt
+    from src.config import settings
+    from src.utils.logging import setup_logging
+    
+    setup_logging()
+    logger.info("Starting manual Daily Ledger Audit")
+    
+    try:
+        if not settings.binance_api_key or settings.binance_api_key == "test_key":
+            logger.info("No valid Binance API Key found. Using BinanceMock for audit.")
+            from src.execution.ccxt_mock import BinanceMock
+            exchange = BinanceMock()
+        else:
+            exchange = ccxt.binance({
+                "apiKey": settings.binance_api_key,
+                "secret": settings.binance_secret,
+                "enableRateLimit": settings.binance_enable_rate_limit
+            })
+        
+        auditor = LedgerAuditor(ccxt_exchange=exchange)
+        auditor.run_daily_audit()
+        logger.info("Manual Daily Ledger Audit completed successfully.")
+    except Exception as e:
+        logger.error(f"Failed to execute manual daily audit: {e}")
+        traceback.print_exc()

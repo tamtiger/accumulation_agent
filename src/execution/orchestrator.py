@@ -70,6 +70,8 @@ class ABASOrchestrator:
             
         self.delta_neutral_manager = DeltaNeutralManager(self.exchange, max_allocation_pct=0.20)
         self.last_heartbeat_time = 0.0
+        self.in_drawdown_cycle = False
+        self.net_btc_accumulated_current_cycle = 0.0
 
     def run_tick(self) -> None:
         """
@@ -105,6 +107,13 @@ class ABASOrchestrator:
             a_range = float(features["A_range"])
             a_mean = float(features["A_mean"])
             float(features["sigma_ann"])
+
+            drawdown = (a_range - price) / a_range if a_range > 0 else 0.0
+            if drawdown > 0.03:
+                if not self.in_drawdown_cycle:
+                    self.in_drawdown_cycle = True
+                    self.net_btc_accumulated_current_cycle = 0.0
+                    logger.info(f"Entered new drawdown cycle > 3% at {price:.2f}. Cycle tracking started.")
 
             # 3. AI Overlay Unsupervised Regime Detection
             regime_dict = self.regime_classifier.predict_tick(features)
@@ -236,13 +245,17 @@ class ABASOrchestrator:
             
             local_low = self.anchored_local_low if self.anchored_local_low is not None else a_local_low_48h
             
+            fifo_head_age_days = self.ledger.get_fifo_head_age_days(tick_time)
+            
             sell_qty_btc = self.grid_engine.calculate_sell_size(
                 current_price=price,
                 local_low=local_low,
                 trading_btc_qty=self.ledger.trading_btc_qty,
                 total_portfolio_value_btc=self.ledger.total_btc_qty,
                 avg_cost_fifo_lot=self.ledger.avg_cost_fifo_lot,
-                regime=regime
+                regime=regime,
+                net_btc_accumulated_current_cycle=self.net_btc_accumulated_current_cycle,
+                fifo_head_age_days=fifo_head_age_days
             )
             if sell_qty_btc > 0.0001:
                 proposed_orders.append(ProposedOrder(side="sell", qty=sell_qty_btc, price=price))
@@ -253,7 +266,8 @@ class ABASOrchestrator:
                 proposed_orders=proposed_orders,
                 current_state=self.ledger.get_state_snapshot(),
                 btc_price=price,
-                daily_deployed_usdt=daily_deployed
+                daily_deployed_usdt=daily_deployed,
+                fifo_head_age_days=fifo_head_age_days
             )
 
             # Audit kill switches (using mock values for live simulation parameters)
@@ -304,16 +318,45 @@ class ABASOrchestrator:
                         timestamp=tick_time,
                         regime_tag=str(regime)
                     )
+                    if self.in_drawdown_cycle:
+                        self.net_btc_accumulated_current_cycle += exec_qty
                 elif order.side == "sell":
-                    self.ledger.consume_sell_lots(
+                    reserve_floor_usdt = self.get_total_portfolio_value_usdt(price) * settings.reserve_floor
+                    sell_result = self.ledger.consume_sell_lots(
                         qty_to_sell=exec_qty,
                         sell_price=exec_price,
                         timestamp=tick_time,
-                        order_id=exec_report["id"]
+                        order_id=exec_report["id"],
+                        reserve_floor_usdt=reserve_floor_usdt
                     )
                     # Reset anchored local low to start a new cycle
                     self.anchored_local_low = None
-                    logger.info("Sell executed. Resetting anchored local low for next cycle.")
+                    self.in_drawdown_cycle = False
+                    self.net_btc_accumulated_current_cycle = max(0.0, self.net_btc_accumulated_current_cycle - exec_qty)
+                    logger.info("Sell executed. Resetting anchored local low and drawdown cycle.")
+
+                    # Handle 70% P&L auto-conversion
+                    trading_cash = sell_result.get("trading_cash_allocation", 0.0)
+                    if trading_cash >= 10.0:  # Binance minimum order size
+                        buy_qty_reinvest = trading_cash / price
+                        logger.info(f"Auto-converting {trading_cash:.2f} USDT (70% P&L) into {buy_qty_reinvest:.6f} BTC.")
+                        try:
+                            reinvest_report = self.exchange.create_order(
+                                symbol="BTC/USDT",
+                                type="market",
+                                side="buy",
+                                amount=buy_qty_reinvest
+                            )
+                            reinvest_exec_price = reinvest_report.get("average", price)
+                            reinvest_exec_qty = reinvest_report.get("amount", buy_qty_reinvest)
+                            self.ledger.add_buy_lot(
+                                qty=reinvest_exec_qty,
+                                price=reinvest_exec_price,
+                                timestamp=tick_time,
+                                regime_tag=str(regime)
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to auto-convert 70% P&L to BTC: {e}")
 
             # 8. Portfolio Tracking Snapshots Persistence
             total_val = self.get_total_portfolio_value_usdt(price)
@@ -357,7 +400,7 @@ class ABASOrchestrator:
         now = time.time()
         if now - self.last_heartbeat_time >= 10.0:
             try:
-                self.redis_client.setex("heartbeat:orchestrator", 15, "alive")
+                self.redis_client.set("heartbeat:orchestrator", "alive", ex=15)
                 self.last_heartbeat_time = now
                 logger.info("Heartbeat pulse emitted to Redis.", action="emit_heartbeat")
             except Exception as e:
@@ -438,3 +481,30 @@ class ABASOrchestrator:
             return 0.0
         finally:
             release_connection(conn)
+
+if __name__ == "__main__":
+    import time
+    import traceback
+    from src.utils.logging import setup_logging
+    
+    setup_logging()
+    logger.info("Starting ABAS Orchestrator Main Loop")
+    
+    try:
+        # Defaults to use_mock=True to avoid binance apiKey errors if keys aren't set in config
+        orchestrator = ABASOrchestrator(use_mock=True)
+        
+        while True:
+            try:
+                orchestrator.run_tick()
+                time.sleep(60)  # Wait 60 seconds between ticks
+            except KeyboardInterrupt:
+                logger.info("Shutting down ABAS Orchestrator")
+                break
+            except Exception as e:
+                logger.error(f"Error in orchestrator loop: {e}")
+                traceback.print_exc()
+                time.sleep(60)
+    except Exception as e:
+        logger.error(f"Failed to initialize orchestrator: {e}")
+        traceback.print_exc()

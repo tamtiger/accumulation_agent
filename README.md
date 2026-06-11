@@ -176,11 +176,11 @@ Các tham số cấu hình chính:
 2.  **Chạy Orchestrator chính:**
     ```bash
     # Chạy vòng lặp tích lũy chính
-    uv run python src/execution/orchestrator.py
+    uv run python -m src.execution.orchestrator
     ```
 3.  **Chạy tiến trình đối soát số dư hàng ngày (Daily Audit):**
     ```bash
-    uv run python src/portfolio/reconcile_audit.py
+    uv run python -m src.portfolio.reconcile_audit
     ```
 
 ### 8.4 Kiểm thử & Giả lập

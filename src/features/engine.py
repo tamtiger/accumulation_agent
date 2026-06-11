@@ -1,8 +1,11 @@
 import logging
+import warnings
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Optional
 from src.utils.db import get_connection, release_connection
+
+warnings.filterwarnings('ignore', message='.*pandas only supports SQLAlchemy.*')
 
 logger = logging.getLogger("feature_agent")
 
@@ -195,7 +198,7 @@ class FeatureEngine:
             
             # 3. Fetch latest 1m ticks (up to 1440 for 24h indicators)
             m1_query = """
-                SELECT time, open, high, low, close, volume, funding_rate, open_interest, liquidations
+                SELECT time, open, high, low, close, volume
                 FROM binance_ohlcv
                 ORDER BY time DESC
                 LIMIT %s

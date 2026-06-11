@@ -147,9 +147,9 @@ class GaussianHMM:
         B = self._pdf(X)
         
         # log values to prevent underflow
-        log_startprob = np.log(self.startprob_)
-        log_transmat = np.log(self.transmat_)
-        log_B = np.log(B)
+        log_startprob = np.log(np.maximum(self.startprob_, 1e-300))
+        log_transmat = np.log(np.maximum(self.transmat_, 1e-300))
+        log_B = np.log(np.maximum(B, 1e-300))
         
         viterbi = np.zeros((n_samples, self.n_components))
         backpointer = np.zeros((n_samples, self.n_components), dtype=int)
