@@ -82,7 +82,9 @@ class GridEngine:
         trading_btc_qty: float,
         total_portfolio_value_btc: float,
         avg_cost_fifo_lot: float,
-        regime: int
+        regime: int,
+        net_btc_accumulated_current_cycle: float = 0.0,
+        fifo_head_age_days: int = 0
     ) -> float:
         """
         Calculates sell size in BTC based on rebound from local low, subject to sell gating and trading floor limits.
@@ -92,8 +94,8 @@ class GridEngine:
 
         # 1. Sell Gating Check: Price must clear cost basis + minimum profit margin
         required_sell_price = avg_cost_fifo_lot * (1.0 + self.min_profit_threshold)
-        if current_price < required_sell_price:
-            logger.debug(f"Sell order suppressed: price {current_price:.2f} < cost threshold {required_sell_price:.2f}")
+        if current_price < required_sell_price and fifo_head_age_days <= 180:
+            logger.debug(f"Sell order suppressed: price {current_price:.2f} < cost threshold {required_sell_price:.2f} and age {fifo_head_age_days} <= 180 days")
             return 0.0
 
         # Calculate rebound from local low
@@ -120,6 +122,10 @@ class GridEngine:
         multiplier = sell_multipliers.get(regime, 1.0)
         
         effective_sell_btc = trading_btc_qty * base_sell_pct * multiplier
+
+        # Accumulation Guard: Capped by the net accumulated BTC in current cycle
+        if effective_sell_btc > net_btc_accumulated_current_cycle:
+            effective_sell_btc = net_btc_accumulated_current_cycle
 
         # Ensure trading_btc_qty after sell is >= trading_floor (as % of total portfolio value in BTC)
         trading_floor_btc = total_portfolio_value_btc * self.trading_floor_pct

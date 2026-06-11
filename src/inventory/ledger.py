@@ -64,6 +64,20 @@ class FIFOLedger:
             return self.active_lots[0].purchase_price
         return 0.0
 
+    def get_fifo_head_age_days(self, current_time: datetime.datetime) -> int:
+        """
+        Returns the age of the current FIFO head lot in days.
+        """
+        if not self.active_lots:
+            return 0
+        head_lot = self.active_lots[0]
+        purchase_t = head_lot.purchase_time
+        if purchase_t.tzinfo is None and current_time.tzinfo is not None:
+            purchase_t = purchase_t.replace(tzinfo=datetime.timezone.utc)
+        elif purchase_t.tzinfo is not None and current_time.tzinfo is None:
+            purchase_t = purchase_t.replace(tzinfo=None)
+        return (current_time - purchase_t).days
+
     def add_buy_lot(self, qty: float, price: float, timestamp: datetime.datetime, regime_tag: str) -> None:
         """
         Creates and appends a new lot to the FIFO queue, updating database and balances.
@@ -93,13 +107,13 @@ class FIFOLedger:
             state_snapshot=self.get_state_snapshot()
         )
 
-    def consume_sell_lots(self, qty_to_sell: float, sell_price: float, timestamp: datetime.datetime, order_id: str) -> float:
+    def consume_sell_lots(self, qty_to_sell: float, sell_price: float, timestamp: datetime.datetime, order_id: str, reserve_floor_usdt: float = 0.0) -> Dict[str, float]:
         """
         Consumes lots from the head of the FIFO queue to fill a sell order.
-        Returns the realized PnL in USDT.
+        Returns a dict containing realized_pnl and trading_cash_allocation.
         """
         if qty_to_sell <= 0 or not self.active_lots:
-            return 0.0
+            return {"realized_pnl": 0.0, "trading_cash_allocation": 0.0}
 
         original_qty_to_sell = qty_to_sell
         realized_pnl = 0.0
@@ -159,9 +173,34 @@ class FIFOLedger:
         for lot in lots_to_remove:
             self.active_lots.remove(lot)
 
-        # Update trading sleeve and increase reserve cash
+        total_proceeds = original_qty_to_sell * sell_price
+        original_cost = total_proceeds - realized_pnl
+        
+        reserve_allocation = 0.0
+        trading_allocation = 0.0
+        
+        normal_reserve_alloc = original_cost + (realized_pnl * 0.30 if realized_pnl > 0 else realized_pnl)
+        normal_trading_alloc = realized_pnl * 0.70 if realized_pnl > 0 else 0.0
+
+        if self.reserve_usdt < reserve_floor_usdt:
+            shortfall = reserve_floor_usdt - self.reserve_usdt
+            if normal_reserve_alloc >= shortfall:
+                reserve_allocation = normal_reserve_alloc
+                trading_allocation = normal_trading_alloc
+            else:
+                if total_proceeds <= shortfall:
+                    reserve_allocation = total_proceeds
+                    trading_allocation = 0.0
+                else:
+                    reserve_allocation = shortfall
+                    trading_allocation = total_proceeds - shortfall
+        else:
+            reserve_allocation = normal_reserve_alloc
+            trading_allocation = normal_trading_alloc
+
+        # Update sleeves
         self.trading_btc_qty -= original_qty_to_sell
-        self.reserve_usdt += original_qty_to_sell * sell_price
+        self.reserve_usdt += reserve_allocation
 
         # Save to trade history database
         InventoryRepository.save_trade_history(
@@ -177,12 +216,12 @@ class FIFOLedger:
         )
 
         logger.info(
-            f"SELL ledger updated: qty={original_qty_to_sell:.6f}, price={sell_price:.2f}, realized_pnl={realized_pnl:.2f}",
+            f"SELL ledger updated: qty={original_qty_to_sell:.6f}, price={sell_price:.2f}, realized_pnl={realized_pnl:.2f}, trading_cash_allocation={trading_allocation:.2f}",
             action="sell_lot_ledger",
             state_snapshot=self.get_state_snapshot()
         )
         
-        return realized_pnl
+        return {"realized_pnl": realized_pnl, "trading_cash_allocation": trading_allocation}
 
     def get_unrealized_pnl(self, current_price: float) -> float:
         """

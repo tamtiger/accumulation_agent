@@ -33,7 +33,8 @@ def test_ledger_buy_sell():
     assert ledger.avg_cost_fifo_lot == 50000.0  # head of FIFO is still 50,000
     
     # Sell 1.5 BTC at 70,000
-    pnl = ledger.consume_sell_lots(1.5, 70000.0, now, "order_1")
+    sell_result = ledger.consume_sell_lots(1.5, 70000.0, now, "order_1")
+    pnl = sell_result["realized_pnl"]
     
     # FIFO logic:
     # First lot (1.0 at 50k) fully consumed -> PnL = (70k - 50k) * 1.0 = 20k
@@ -79,21 +80,18 @@ def test_hypothesis_fifo_conservation(buys, sell_fraction):
     # Sell a fraction of total bought quantity
     sell_qty = total_bought_qty * sell_fraction
     sell_price = 150000.0
-    ledger.consume_sell_lots(sell_qty, sell_price, now, "sell_order")
+    sell_result = ledger.consume_sell_lots(sell_qty, sell_price, now, "sell_order")
+    trading_cash = sell_result.get("trading_cash_allocation", 0.0)
     
     # Verify conservation: final BTC qty must match original minus sold
     assert abs(ledger.trading_btc_qty - (total_bought_qty - sell_qty)) < 1e-7
     
     # Verify that total assets value is conserved:
-    # Portfolio value in USDT = reserve_usdt + trading_btc_qty * sell_price
-    # After-sell portfolio value must equal pre-sell value (measured at sell_price) plus realized pnl?
-    # No: sell_qty * sell_price is added to reserve, sell_qty of BTC is removed.
-    # USDT cash increases by sell_qty * sell_price, which is exactly the amount subtracted from the BTC sleeve.
-    # Therefore, the sum (reserve_usdt + trading_btc_qty * sell_price) must be strictly identical before and after.
+    # Portfolio value in USDT = reserve_usdt + trading_btc_qty * sell_price + trading_cash
+    # After-sell portfolio value must equal pre-sell value (measured at sell_price)
     # Pre-sell portfolio value = (10000000 - total_spent_usdt) + total_bought_qty * sell_price
-    # Post-sell portfolio value = reserve_usdt + trading_btc_qty * sell_price
     pre_sell_val = (10000000.0 - total_spent_usdt) + total_bought_qty * sell_price
-    post_sell_val = ledger.reserve_usdt + ledger.trading_btc_qty * sell_price
+    post_sell_val = ledger.reserve_usdt + trading_cash + ledger.trading_btc_qty * sell_price
     assert abs(pre_sell_val - post_sell_val) < 1e-7
 
 def test_ledger_restore_core_btc():

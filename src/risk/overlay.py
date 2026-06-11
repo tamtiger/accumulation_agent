@@ -36,7 +36,8 @@ class RiskOverlay:
         proposed_orders: List[ProposedOrder],
         current_state: Dict[str, float],
         btc_price: float,
-        daily_deployed_usdt: float
+        daily_deployed_usdt: float,
+        fifo_head_age_days: int = 0
     ) -> None:
         """
         Evaluates a list of proposed orders against the 7 invariants.
@@ -74,9 +75,9 @@ class RiskOverlay:
             elif order.side == "sell":
                 # INV-5: Sell-gating check: price must clear FIFO head lot cost basis + fees
                 required_price = avg_cost_fifo_lot * (1.0 + self.min_profit_threshold)
-                if order.price < required_price:
+                if order.price < required_price and fifo_head_age_days <= 180:
                     raise InvariantViolationError(
-                        f"INV-5 Violated: Sell price {order.price:.2f} < FIFO lot cost plus threshold {required_price:.2f}"
+                        f"INV-5 Violated: Sell price {order.price:.2f} < FIFO lot cost plus threshold {required_price:.2f} and lot age ({fifo_head_age_days} days) is <= 180"
                     )
                 next_trading_btc -= order.qty
                 next_reserve_usdt += order_val
