@@ -1,5 +1,3 @@
-import json
-from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,22 +29,11 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-def load_settings(config_path: str = "config/production.json") -> Settings:
+def load_settings() -> Settings:
     """
-    Loads settings from the specified JSON file, and then overrides with env variables.
+    Loads settings from environment variables and the .env file.
     """
-    init_kwargs = {}
-    path = Path(config_path)
-    if path.is_file():
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                init_kwargs = json.load(f)
-        except Exception:
-            # Fallback to defaults
-            pass
-            
-    # Load settings. Environmental variables (or those in .env) will automatically override init_kwargs.
-    return Settings(**init_kwargs)
+    return Settings()
 
 # Global settings instance
 settings = load_settings()
