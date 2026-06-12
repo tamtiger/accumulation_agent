@@ -76,7 +76,7 @@ graph TD
     end
 ```
 
-Để biết thêm chi tiết về vai trò và cơ chế phối hợp của các tác tử, vui lòng tham khảo [AGENTS.md](file:///d:/MyProject/accumulation_agent/AGENTS.md).
+Để biết thêm chi tiết về vai trò và cơ chế phối hợp của các tác tử, vui lòng tham khảo [AGENTS.md](AGENTS.md).
 
 ---
 

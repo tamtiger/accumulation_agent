@@ -1,4 +1,3 @@
-import pytest
 import pandas as pd
 from unittest.mock import patch, MagicMock
 from src.backtest.download_data import download_historical_data

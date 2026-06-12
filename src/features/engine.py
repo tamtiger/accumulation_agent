@@ -198,9 +198,18 @@ class FeatureEngine:
             
             # 3. Fetch latest 1m ticks (up to 1440 for 24h indicators)
             m1_query = """
-                SELECT time, open, high, low, close, volume
-                FROM binance_ohlcv
-                ORDER BY time DESC
+                SELECT o.time, o.open, o.high, o.low, o.close, o.volume,
+                       f.funding_rate,
+                       oi.open_interest,
+                       COALESCE((
+                           SELECT SUM(qty)
+                           FROM binance_liquidations l
+                           WHERE l.time = o.time AND l.symbol = o.symbol
+                       ), 0.0) as liquidations
+                FROM binance_ohlcv o
+                LEFT JOIN binance_funding_rates f ON o.time = f.time AND o.symbol = f.symbol
+                LEFT JOIN binance_open_interest oi ON o.time = oi.time AND o.symbol = oi.symbol
+                ORDER BY o.time DESC
                 LIMIT %s
             """
             df_1m = pd.read_sql_query(m1_query, conn, params=(limit,))

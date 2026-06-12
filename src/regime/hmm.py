@@ -9,8 +9,7 @@ class GaussianHMM:
     def __init__(self, n_components: int = 3, random_state: Optional[int] = None):
         self.n_components = n_components
         self.random_state = random_state
-        if random_state is not None:
-            np.random.seed(random_state)
+        self.rng = np.random.default_rng(random_state)
             
         self.startprob_ = None
         self.transmat_ = None
@@ -28,7 +27,7 @@ class GaussianHMM:
         np.fill_diagonal(self.transmat_, 0.9)
         
         # Initialize means using random choice of data points
-        indices = np.random.choice(n_samples, self.n_components, replace=False)
+        indices = self.rng.choice(n_samples, self.n_components, replace=False)
         self.means_ = X[indices].copy()
         
         # Initialize covariances to variance of data

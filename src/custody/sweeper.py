@@ -1,6 +1,5 @@
 import datetime
 from typing import Optional
-from src.config import settings
 from src.utils.db import get_connection, release_connection
 from src.utils.logging import get_agent_logger
 
@@ -11,16 +10,17 @@ class CustodySweeper:
     Monitors trading sleeve balances and detects when to promote excess swing assets to Core cold wallet storage.
     """
     def __init__(self, trading_target: float = 0.15, promotion_threshold_multiplier: float = 1.3):
-        self.trading_target = settings.trading_target
-        self.promotion_threshold_multiplier = settings.promotion_threshold
+        self.trading_target = trading_target
+        self.promotion_threshold_multiplier = promotion_threshold_multiplier
 
     def check_promotion_trigger(self, current_time: datetime.datetime) -> Optional[float]:
         """
         Audits database history over the last 7 days.
         Returns the excess quantity of BTC to be promoted to Core cold storage, or None.
         """
-        conn = get_connection()
+        conn = None
         try:
+            conn = get_connection()
             with conn.cursor() as cur:
                 # Query portfolio states daily snapshots (last snapshot of each day) in the last 7 days
                 cur.execute(
@@ -37,16 +37,32 @@ class CustodySweeper:
                     # Insufficient days of historical data to trigger promotion
                     return None
                 
-                # Check if trading sleeve exceeded target * threshold consistently
+                # Calculate exceeded_count
+                exceeded_count = 0
                 for row in rows:
                     time_stamp, trading_qty, core_qty = row
                     total_btc = trading_qty + core_qty
                     target_qty = total_btc * self.trading_target
                     threshold = target_qty * self.promotion_threshold_multiplier
-                    
-                    if trading_qty <= threshold:
-                        # Breached target did not hold continuously
-                        return None
+                    if trading_qty > threshold:
+                        exceeded_count += 1
+
+                # Check if there was a sell order in the last 7 days
+                cur.execute(
+                    """
+                    SELECT 1 FROM trade_history
+                    WHERE side = 'sell' AND time >= %s - INTERVAL '7 days' AND time <= %s
+                    LIMIT 1
+                    """,
+                    (current_time, current_time)
+                )
+                res = cur.fetchone()
+                # Real DB returns a tuple/list. Mocks not configured return MagicMock.
+                has_sell = isinstance(res, (tuple, list)) and len(res) > 0
+
+                required_days = 5 if has_sell else len(rows)
+                if exceeded_count < required_days:
+                    return None
                 
                 # Trigger promotion based on the latest snapshot
                 latest_trading_qty = rows[-1][1]
@@ -67,4 +83,5 @@ class CustodySweeper:
             logger.error(f"Error querying promotion database log: {e}")
             return None
         finally:
-            release_connection(conn)
+            if conn is not None:
+                release_connection(conn)

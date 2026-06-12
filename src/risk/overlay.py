@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 from src.config import settings
 from src.utils.logging import get_agent_logger
@@ -30,6 +30,10 @@ class RiskOverlay:
         self.min_profit_threshold = settings.min_profit_threshold
         self.system_halted = False
         self.buys_paused = False
+        self.active_soft_halts: Dict[str, float] = {}  # trigger_name -> timestamp of last activity
+        self.active_soft_halts_reasons: Dict[str, str] = {}  # trigger_name -> reason string
+        self.halt_history: List[float] = []            # list of timestamps of any kill switch trigger in the last 24h
+        self.manual_halt = False
 
     def check_invariants(
         self,
@@ -148,50 +152,77 @@ class RiskOverlay:
         stablecoin_peg_deviations: Dict[str, float],
         bid_ask_spread_binance: float,
         median_30d_spread: float,
-        execution_slippage: float
+        execution_slippage: float,
+        funding_rate: float = 0.0,
+        current_time: Optional[float] = None
     ) -> None:
         """
         Monitors system health parameters and triggers immediate HALT state on any violation.
         """
-        # 1. Drawdown limits
-        if drawdown_24h > 0.15:
-            self.trigger_halt("Drawdown > 15% in 24 hours")
+        import time
+        now = current_time if current_time is not None else time.time()
+
+        if self.manual_halt:
+            self.system_halted = True
+            raise SystemHaltError("System is locked in manual halt state. Human resume required.")
+
+        # 1. Hard triggers (never auto-recover)
         if drawdown_7d > 0.25:
+            self.manual_halt = True
             self.trigger_halt("Drawdown > 25% in 7 days")
-
-        # 2. Reserve floor check (No hard halt as per AGENTS_SAFETY.md: Pause buys only)
-        reserve_ratio = current_reserve_usdt / total_portfolio_usdt if total_portfolio_usdt > 0.0 else 0.0
-        if reserve_ratio < self.reserve_floor:
-            if not self.buys_paused:
-                self.buys_paused = True
-                logger.warning(
-                    f"Reserve ratio ({reserve_ratio*100:.1f}%) fell below floor ({self.reserve_floor*100:.1f}%). Buys are paused.",
-                    action="reserve_floor_pause"
-                )
-        else:
-            if self.buys_paused:
-                self.buys_paused = False
-                logger.info(
-                    f"Reserve ratio ({reserve_ratio*100:.1f}%) restored above floor ({self.reserve_floor*100:.1f}%). Buys are resumed.",
-                    action="reserve_floor_resume"
-                )
-
-        # 3. Exchange API error rate
-        if api_error_rate_5m > 0.05:
-            self.trigger_halt(f"Exchange API error rate > 5% in 5-minute rolling window ({api_error_rate_5m*100:.1f}%)")
-
-        # 4. Stablecoin peg deviation
-        for stablecoin, deviation in stablecoin_peg_deviations.items():
-            if deviation > 0.02:
-                self.trigger_halt(f"Stablecoin peg deviation for {stablecoin} > 2% ({deviation*100:.1f}%)")
-
-        # 5. Bid-ask spread check
-        if bid_ask_spread_binance > 5.0 * median_30d_spread:
-            self.trigger_halt(f"Bid-ask spread ({bid_ask_spread_binance:.6f}) > 5x 30-day median ({median_30d_spread:.6f})")
-
-        # 6. Execution slippage
         if execution_slippage > 0.02:
+            self.manual_halt = True
             self.trigger_halt(f"Execution price slippage of a completed fill > 2% ({execution_slippage*100:.1f}%)")
+
+        # Helper to process soft trigger
+        def check_soft_trigger(name: str, condition: bool, reason: str):
+            if condition:
+                self.active_soft_halts_reasons[name] = reason
+                if name not in self.active_soft_halts:
+                    # New trigger event
+                    self.halt_history.append(now)
+                    # Filter history to last 24h
+                    self.halt_history = [t for t in self.halt_history if now - t <= 86400]
+                    if len(self.halt_history) >= 2:
+                        self.manual_halt = True
+                        self.trigger_halt(f"Double trigger of halt switches within 24h. Manual resume required. Last trigger: {reason}")
+                self.active_soft_halts[name] = now
+            else:
+                if name in self.active_soft_halts:
+                    if now - self.active_soft_halts[name] >= 1800:
+                        # Cleared for 30 minutes, recover
+                        logger.info(f"Soft trigger '{name}' cleared for 30 minutes. Auto-recovering.")
+                        del self.active_soft_halts[name]
+                        if name in self.active_soft_halts_reasons:
+                            del self.active_soft_halts_reasons[name]
+
+        # 2. Check soft triggers
+        check_soft_trigger("drawdown_24h", drawdown_24h > 0.15, "Drawdown > 15% in 24 hours")
+        check_soft_trigger("api_error", api_error_rate_5m > 0.05, f"Exchange API error rate > 5% in 5-minute rolling window ({api_error_rate_5m*100:.1f}%)")
+        
+        peg_depegged = any(dev > 0.02 for dev in stablecoin_peg_deviations.values())
+        check_soft_trigger("peg_depeg", peg_depegged, "Stablecoin peg deviation > 2%")
+        
+        check_soft_trigger("spread", bid_ask_spread_binance > 5.0 * median_30d_spread, f"Bid-ask spread ({bid_ask_spread_binance:.6f}) > 5x 30-day median ({median_30d_spread:.6f})")
+        check_soft_trigger("funding_rate", funding_rate > 0.003, f"Funding rate > 0.3%/8h ({funding_rate*100:.3f}%)")
+        
+        reserve_ratio = current_reserve_usdt / total_portfolio_usdt if total_portfolio_usdt > 0.0 else 0.0
+        check_soft_trigger("reserve_floor", reserve_ratio < self.reserve_floor, f"Reserve ratio ({reserve_ratio*100:.1f}%) fell below floor ({self.reserve_floor*100:.1f}%)")
+
+        # 3. Determine if system is halted or buys paused
+        halt_reasons = [self.active_soft_halts_reasons[k] for k in self.active_soft_halts if k in ["api_error", "peg_depeg", "spread"]]
+        if halt_reasons:
+            self.system_halted = True
+            raise SystemHaltError(f"System halted due to soft trigger(s): {', '.join(halt_reasons)}")
+        else:
+            self.system_halted = False
+
+        buy_pause_reasons = [k for k in self.active_soft_halts if k in ["drawdown_24h", "funding_rate", "reserve_floor"]]
+        if buy_pause_reasons:
+            self.buys_paused = True
+            logger.warning(f"Buys paused due to: {', '.join(buy_pause_reasons)}")
+        else:
+            self.buys_paused = False
 
     def trigger_halt(self, reason: str) -> None:
         """

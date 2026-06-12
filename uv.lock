@@ -12,9 +12,10 @@ resolution-markers = [
 
 [[package]]
 name = "abas"
-version = "2.0.0"
+version = "2.1.9"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "ccxt" },
     { name = "duckdb" },
     { name = "numpy" },
@@ -36,6 +37,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp" },
     { name = "ccxt", specifier = ">=4.2.0" },
     { name = "duckdb", specifier = ">=0.9.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.75.0" },

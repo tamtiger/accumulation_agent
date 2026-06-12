@@ -40,6 +40,7 @@ class ABASOrchestrator:
         self.custody_sweeper = CustodySweeper(trading_target=settings.trading_target, promotion_threshold_multiplier=settings.promotion_threshold)
         self.notifier = TelegramNotifier()
         self.anchored_local_low: Optional[float] = None
+        self.anchoring_time: Optional[float] = None
         
         # Initialize execution exchange connection
         if use_mock:
@@ -103,7 +104,7 @@ class ABASOrchestrator:
                 return
 
             price = float(features["close"])
-            a_trend = float(features["A_trend"])
+            float(features["A_trend"])
             a_range = float(features["A_range"])
             a_mean = float(features["A_mean"])
             float(features["sigma_ann"])
@@ -237,11 +238,20 @@ class ABASOrchestrator:
             if price >= rebound_threshold:
                 if self.anchored_local_low is None:
                     self.anchored_local_low = a_local_low_48h
-                    logger.info(f"Rebound detected! Anchoring local_low to {self.anchored_local_low:.2f}")
+                    self.anchoring_time = tick_time.timestamp()
+                    logger.info(f"Rebound detected! Anchoring local_low to {self.anchored_local_low:.2f} at {tick_time}")
             else:
                 if self.anchored_local_low is not None and price < self.anchored_local_low:
                     logger.info(f"Price fell below anchored local low. Resetting from {self.anchored_local_low:.2f} to {a_local_low_48h:.2f}")
                     self.anchored_local_low = a_local_low_48h
+                    self.anchoring_time = tick_time.timestamp()
+
+            # Expiration of sell cycle after 48h without a sell
+            if self.anchored_local_low is not None and self.anchoring_time is not None:
+                if tick_time.timestamp() - self.anchoring_time >= 48 * 3600:
+                    logger.info("48 hours passed since rebound detection without any sell execution. Resetting anchored local low.")
+                    self.anchored_local_low = None
+                    self.anchoring_time = None
             
             local_low = self.anchored_local_low if self.anchored_local_low is not None else a_local_low_48h
             
@@ -271,6 +281,7 @@ class ABASOrchestrator:
             )
 
             # Audit kill switches (using mock values for live simulation parameters)
+            funding_rate_val = float(features.get("funding_rate", 0.0))
             self.risk_overlay.audit_kill_switches(
                 drawdown_24h=0.0,
                 drawdown_7d=0.0,
@@ -280,7 +291,9 @@ class ABASOrchestrator:
                 stablecoin_peg_deviations={"USDT": 0.0},
                 bid_ask_spread_binance=0.0002,
                 median_30d_spread=0.0002,
-                execution_slippage=0.0
+                execution_slippage=0.0,
+                funding_rate=funding_rate_val,
+                current_time=tick_time.timestamp()
             )
 
             # 7. Order Execution & Slippage audits
@@ -411,8 +424,9 @@ class ABASOrchestrator:
         return self.ledger.reserve_usdt + (self.ledger.core_btc_qty + self.ledger.trading_btc_qty + dn_spot_qty) * btc_price
 
     def save_raw_ohlcv_to_db(self, tick: Dict[str, Any]) -> None:
-        conn = get_connection()
+        conn = None
         try:
+            conn = get_connection()
             with conn.cursor() as cur:
                 # Store candle
                 cur.execute(
@@ -460,11 +474,13 @@ class ABASOrchestrator:
         except Exception as e:
             logger.error(f"Error persisting raw OHLCV tick: {e}")
         finally:
-            release_connection(conn)
+            if conn is not None:
+                release_connection(conn)
 
     def get_daily_deployed_usdt(self, current_time: datetime.datetime) -> float:
-        conn = get_connection()
+        conn = None
         try:
+            conn = get_connection()
             with conn.cursor() as cur:
                 # Sum the value of all buy trade history in the last 24h relative to current_time
                 cur.execute(
@@ -480,7 +496,8 @@ class ABASOrchestrator:
             logger.error(f"Error computing daily deployed value: {e}")
             return 0.0
         finally:
-            release_connection(conn)
+            if conn is not None:
+                release_connection(conn)
 
 if __name__ == "__main__":
     import time

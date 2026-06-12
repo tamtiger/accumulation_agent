@@ -57,11 +57,11 @@ class GridEngine:
         # Regime multiplier selection
         # 0: Panic Dump, 1: Sideways, 2: Bull Trend, 3: Blowoff Top, 4: Bear Market
         regime_multipliers = {
-            0: 1.5,   # Panic dump
+            0: 1.75,  # Panic dump
             1: 1.0,   # Sideways
             2: 0.8,   # Bull trend
             3: 0.0,   # Blowoff top (disabled)
-            4: 0.4    # Bear trend
+            4: 1.1    # Bear trend
         }
         multiplier = regime_multipliers.get(regime, 1.0)
 
@@ -117,7 +117,7 @@ class GridEngine:
             1: 1.0,   # Sideways
             2: 0.3,   # Bull trend (gồng lãi)
             3: 1.5,   # Blowoff top (chốt lãi mạnh)
-            4: 0.8    # Bear trend
+            4: 0.4    # Bear trend
         }
         multiplier = sell_multipliers.get(regime, 1.0)
         

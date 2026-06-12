@@ -1,7 +1,5 @@
-import os
 import time
 import pandas as pd
-import numpy as np
 import ccxt
 from pathlib import Path
 from src.data.validators import DataValidator, DataGapError, OutlierError
@@ -87,7 +85,7 @@ def download_historical_data(
         }
         
         try:
-            validated = validator.validate_and_filter(tick_dict)
+            validator.validate_and_filter(tick_dict)
             cleaned_rows.append(row)
         except DataGapError as e:
             # Plan: Forward-fill bounded gaps < 5 hours.

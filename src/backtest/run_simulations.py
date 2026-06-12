@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import numpy as np
 import duckdb
 from typing import Dict, Any, List
 from src.backtest.harness import BacktestHarness
@@ -118,8 +117,8 @@ def generate_report(
     end_time = df_data.iloc[-1]["time"]
     
     hodl_perf = (abas_res["after_tax_total_btc"] - hodl_btc) / hodl_btc * 100
-    dca_perf = (abas_res["after_tax_total_btc"] - dca_btc) / dca_btc * 100
-    fixed_grid_perf = (abas_res["after_tax_total_btc"] - fixed_grid_res["after_tax_total_btc"]) / fixed_grid_res["after_tax_total_btc"] * 100
+    (abas_res["after_tax_total_btc"] - dca_btc) / dca_btc * 100
+    (abas_res["after_tax_total_btc"] - fixed_grid_res["after_tax_total_btc"]) / fixed_grid_res["after_tax_total_btc"] * 100
     
     report_content = f"""# ABAS v2 Backtest & Performance Report
 

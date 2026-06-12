@@ -1,6 +1,5 @@
 import pandas as pd
 from typing import Dict, Any
-from unittest.mock import patch
 from src.backtest.harness import BacktestHarness
 from src.grid.engine import GridEngine
 
@@ -12,7 +11,7 @@ def run_passive_hodl(df_data: pd.DataFrame, initial_usdt: float, initial_core_bt
     if df_data.empty:
         return initial_core_btc
     start_price = float(df_data.iloc[0]["close"])
-    final_price = float(df_data.iloc[-1]["close"])
+    float(df_data.iloc[-1]["close"])
     total_btc = initial_core_btc + (initial_usdt / start_price)
     return total_btc
 

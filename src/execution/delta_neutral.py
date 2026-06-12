@@ -1,7 +1,7 @@
 import os
 import json
 import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from src.utils.logging import get_agent_logger
 
 logger = get_agent_logger("delta_neutral")

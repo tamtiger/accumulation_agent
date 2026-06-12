@@ -47,7 +47,7 @@ def test_grid_buy_sizing():
         total_portfolio_value_usdt=total_val,
         regime=0
     )
-    assert size == 30000.0 * 0.20 * 1.5  # 9,000
+    assert size == 30000.0 * 0.20 * 1.75  # 10,500
 
     # 4. Blowoff Top (regime = 3) -> deploy 0
     size = engine.calculate_buy_size(

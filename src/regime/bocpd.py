@@ -74,6 +74,17 @@ class BOCPD:
         self.alpha_t = np.insert(new_alpha, 0, self.alpha_0)
         self.beta_t = np.insert(new_beta, 0, self.beta_0)
         
+        # Truncate arrays to prevent memory leak
+        max_size = 500
+        if len(self.R) > max_size:
+            self.R = self.R[:max_size]
+            self.R = self.R / np.sum(self.R)
+            self.mu_t = self.mu_t[:max_size]
+            self.kappa_t = self.kappa_t[:max_size]
+            self.alpha_t = self.alpha_t[:max_size]
+            self.beta_t = self.beta_t[:max_size]
+            self.t = max_size - 1
+
         return self.R
 
     def get_change_probability(self) -> float:
